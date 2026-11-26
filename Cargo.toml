@@ -14,8 +14,6 @@ members = [
 version = "0.1.0"
 edition = "2021"
 license = "UNLICENSED"
-repository = "https://github.com/trancaodai1651/Doto_Skill"
-rust-version = "1.85"
 
 [workspace.dependencies]
 doto-core = { path = "crates/core" }

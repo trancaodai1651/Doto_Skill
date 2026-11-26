@@ -249,7 +249,7 @@ fn probe_battery() -> Option<BatteryInfo> {
         if !out.contains("InternalBattery") {
             return Some(BatteryInfo { present: false, percent: None, charging: None });
         }
-        let percent = out.split(|c: char| c == '\t' || c == ';').find_map(|p| p.trim().strip_suffix('%').and_then(|n| n.parse::<f32>().ok()));
+        let percent = out.split(['\t', ';']).find_map(|p| p.trim().strip_suffix('%').and_then(|n| n.parse::<f32>().ok()));
         return Some(BatteryInfo { present: true, percent, charging: Some(out.contains("AC Power")) });
     }
     #[allow(unreachable_code)]
