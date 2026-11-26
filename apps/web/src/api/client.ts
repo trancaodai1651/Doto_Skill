@@ -18,6 +18,7 @@ import type {
   Role,
   ServerConfig,
   ServerStatus,
+  ShareLink,
   Skill,
   SkillDetail,
   SkillSource,
@@ -274,6 +275,8 @@ export function createApi(http: HttpClient) {
       thumbnailUrl: (id: string) => `/api/videos/${enc(id)}/thumbnail`,
       streamUrl: (id: string) => `/api/videos/${enc(id)}/stream`,
       downloadUrl: (id: string) => `/api/videos/${enc(id)}/download`,
+      share: (id: string, ttlMinutes: number) => http.post<ShareLink>(`/api/videos/${enc(id)}/share`, { ttlMinutes }),
+      revokeShare: (shareId: string) => http.del<void>(`/api/shares/${enc(shareId)}`),
     },
     jobs: {
       list: () => http.get<Job[]>('/api/jobs'),

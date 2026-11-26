@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router';
-import { Badge, EmptyState, Select, TextInput, useToast } from '@doto/ui';
+import { Badge, Button, ConfirmDialog, EmptyState, Select, TextInput, useToast } from '@doto/ui';
 import { api } from '../api/client';
 import { useServerEvent } from '../api/events';
-import type { VideoAsset, VideoKind } from '../api/types';
+import type { ShareLink, VideoAsset, VideoKind } from '../api/types';
 import { AsyncView, KeyValue, PageHeader } from '../components/common';
 import { VideoThumb, videoMeta } from '../components/video';
 import { useI18n } from '../i18n';
@@ -107,6 +107,7 @@ export function PlayerPage() {
   const { id = '' } = useParams();
   const { t, lang } = useI18n();
   const video = useApi(`video:${id}`, () => api.videos.get(id));
+  const { isOwner } = useCaps();
   return (
     <>
       <p className="mb-3">
@@ -138,6 +139,7 @@ export function PlayerPage() {
               </a>
               {v.status !== 'ready' && <Badge tone="danger">{t(`video.status.${v.status}`)}</Badge>}
             </div>
+            {isOwner && v.kind === 'export' && <SharePanel videoId={v.id} />}
             <div className="mt-4 rounded-lg border border-line bg-surface p-4">
               <KeyValue
                 items={[
@@ -154,5 +156,83 @@ export function PlayerPage() {
         )}
       </AsyncView>
     </>
+  );
+}
+
+const SHARE_TTLS = [60, 24 * 60, 7 * 24 * 60];
+
+/** Owner tạo/thu hồi link chia sẻ có hạn cho video đã xuất (API: POST /api/videos/:id/share, DELETE /api/shares/:id). */
+function SharePanel({ videoId }: { videoId: string }) {
+  const { t, lang } = useI18n();
+  const toast = useToast();
+  const [ttl, setTtl] = useState(String(SHARE_TTLS[0]));
+  const [confirm, setConfirm] = useState(false);
+  const [links, setLinks] = useState<ShareLink[]>([]);
+  const label = (m: number) => (m >= 1440 ? t('share.days', { n: m / 1440 }) : m >= 60 ? t('share.hours', { n: m / 60 }) : t('share.minutes', { n: m }));
+
+  async function copy(url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.push({ tone: 'success', title: t('share.copied') });
+    } catch {
+      window.prompt(t('share.copy'), url);
+    }
+  }
+
+  return (
+    <section className="mt-4 rounded-lg border border-line bg-surface p-4" aria-labelledby="share-title" data-testid="share-panel">
+      <h2 id="share-title" className="font-semibold">
+        {t('share.title')}
+      </h2>
+      <p className="mt-1 text-sm text-muted">{t('share.desc')}</p>
+      <div className="mt-3 flex flex-wrap items-end gap-2">
+        <Select
+          label={t('share.ttl')}
+          value={ttl}
+          onChange={(e) => setTtl(e.target.value)}
+          options={SHARE_TTLS.map((m) => ({ value: String(m), label: label(m) }))}
+        />
+        <Button onClick={() => setConfirm(true)}>{t('share.create')}</Button>
+      </div>
+      {links.length > 0 && (
+        <ul className="mt-3 flex flex-col gap-2">
+          {links.map((l) => (
+            <li key={l.id} className="flex flex-wrap items-center gap-2 rounded-md bg-surface-2 p-2 text-sm">
+              <code className="min-w-0 flex-1 break-all">{l.url}</code>
+              <span className="text-muted">
+                {t('share.expires')}: {formatDate(l.expiresAt, lang)}
+              </span>
+              <Button size="sm" onClick={() => void copy(l.url)}>
+                {t('share.copy')}
+              </Button>
+              <Button
+                size="sm"
+                variant="danger"
+                onClick={async () => {
+                  await api.videos.revokeShare(l.id);
+                  setLinks((xs) => xs.filter((x) => x.id !== l.id));
+                  toast.push({ tone: 'success', title: t('share.revoked') });
+                }}
+              >
+                {t('share.revoke')}
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <ConfirmDialog
+        open={confirm}
+        title={t('share.confirmTitle')}
+        confirmLabel={t('share.create')}
+        onCancel={() => setConfirm(false)}
+        onConfirm={async () => {
+          const link = await api.videos.share(videoId, Number(ttl));
+          setLinks((xs) => [link, ...xs]);
+          setConfirm(false);
+        }}
+      >
+        <p>{t('share.confirmBody')}</p>
+      </ConfirmDialog>
+    </section>
   );
 }

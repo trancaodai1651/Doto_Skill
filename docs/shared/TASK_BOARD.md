@@ -16,7 +16,6 @@
 | Kiểm chứng trên điện thoại/tablet vật lý cùng LAN | chủ repo | Hiện kiểm chứng bằng trình duyệt qua IP Tailscale cùng host |
 | Chạy installer macOS trên máy Mac thật (Intel + Apple Silicon) | bất kỳ | CI build universal; cần người kiểm thử |
 | Ký số Authenticode / Apple notarization | chủ repo | Cần chứng chỉ |
-| UI quản lý share link (API đã có) | codex | `/api/videos/:id/share`, `/api/shares/:id` |
 | Playwright E2E chạy trên server Rust thật trong CI | codex | Dùng `doto-server --token-file` |
 
 ## Blocked
@@ -36,3 +35,5 @@
 - Server: auth/CSRF/RBAC/pairing/revoke/rate-limit/IP allowlist/security headers; Range/416/download; share link; SSE.
 - Demo E2E thật trong trình duyệt: onboarding → LAN → scan → render NVENC → Viewer qua URL LAN xem/tua/tải.
 - Scripts: task runner, update-handoff, secrets-scan, license-check; workflow CI + Release.
+- UI link chia sẻ có hạn trong trang phát video (Owner, video export): tạo có xác nhận, sao chép, thu hồi — kiểm chứng trên server thật (206 ẩn danh → thu hồi → 404).
+- Installer Windows build cục bộ: NSIS 5.51 MiB + MSI 7.82 MiB, smoke test binary release.
