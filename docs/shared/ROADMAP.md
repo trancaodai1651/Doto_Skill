@@ -10,7 +10,7 @@ Trạng thái: ✅ đạt (có bằng chứng lệnh/test) · 🟡 một phần 
 | P3 | CLI & Skills: onboarding, detect/install 4 công cụ, nhiều thư mục, GitHub public/private, OS vault, validation, mapping provider | P1 | test skills/service + import GitHub thật | 🟡 Device Flow cần OAuth client_id (blocker B1); private repo qua `gh` CLI đã có |
 | P4 | Video E2E: import, ffprobe, thumbnail, render, queue, H.264, library, playback range/download, danh sách/thu hồi share link, RBAC | P1, P2 | render_e2e + api_security + E2E trình duyệt | ✅ |
 | P5 | Cloudflare & hardening: cloudflared manager, named tunnel, Access guidance, pairing/revoke, backup/restore SQLite, audit, secrets scan, license check | P1 | test tunnel/pairing/backup-restore; secrets-scan + license-check xanh | 🟡 chạy tunnel thật với Cloudflare account chưa kiểm chứng (blocker B2) |
-| P6 | Release & handoff: đóng gói Win/macOS, GitHub Actions, tài liệu, release notes, checksum, handoff, push & GitHub Release `v0.1.0` | P0–P5 | Release workflow xanh, asset + SHA256SUMS trên GitHub Release | ✅ (đang chạy/kiểm chứng Release v0.1.0 — xem TASK_BOARD) |
+| P6 | Release & handoff: đóng gói Win/macOS, GitHub Actions, tài liệu, release notes, checksum, handoff, push & GitHub Release `v0.1.0` | P0–P5 | Release workflow xanh, asset + SHA256SUMS trên GitHub Release | ✅ (đã phát hành `v0.1.0` unsigned kèm SHA256SUMS) |
 
 ## Sau v0.1.0 (đề xuất)
 - Ký số Windows (Authenticode) + Apple notarization khi có chứng chỉ.

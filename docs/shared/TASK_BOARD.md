@@ -5,7 +5,7 @@
 ## In progress
 | Task | Owner | Ghi chú / next action |
 | --- | --- | --- |
-| Phát hành GitHub Release `v0.1.0` (installer Win NSIS/MSI + macOS universal DMG/app.zip + SHA256SUMS) | antigravity | Push cập nhật đồng bộ App ↔ Web → CI xanh Win/macOS → merge `main` → tag `v0.1.0` → kiểm chứng Release assets |
+| _(Không có — `v0.1.0` đã phát hành trên `main`)_ | — | Xem mục **Pending** bên dưới cho v0.2.0 |
 
 ## Pending
 | Task | Owner | Ghi chú |
@@ -35,3 +35,4 @@
 - 4 CliProvider + ToolManager (detect/version/auth/install có xác nhận/diagnostics); cloudflared installer có kiểm checksum + Authenticode; TunnelManager quick/named.
 - Server: auth/CSRF/CORS Bearer/RBAC/pairing/revoke/rate-limit/IP allowlist/security headers; Range/416/download; tạo + liệt kê + thu hồi share link (`GET/POST /api/videos/:id/shares|share`, `DELETE /api/shares/:id`); SSE.
 - Kiểm thử: 101 test Rust + 33 unit test Web + 4 kịch bản Playwright E2E + secrets-scan + license-check xanh 100%.
+- **Phát hành GitHub Release `v0.1.0` (`12084d4677`):** CI + Release workflow (`45788563182`) xanh trên Ubuntu, Windows x64 và macOS universal (`x86_64` + `arm64`); đã upload `.exe` NSIS, `.msi`, `.dmg`, `.app.zip`, `SHA256SUMS.txt`, `THIRD_PARTY_LICENSES.tsv` lên https://github.com/trancaodai1651/Doto_Skill/releases/tag/v0.1.0.
