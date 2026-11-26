@@ -63,8 +63,12 @@ jobs:
         with:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
-      - uses: FedericoCarboni/setup-ffmpeg@v3
-        id: ffmpeg
+      - name: Install FFmpeg (Windows)
+        if: runner.os == 'Windows'
+        uses: FedericoCarboni/setup-ffmpeg@v3
+      - name: Install FFmpeg (macOS, Homebrew)
+        if: runner.os == 'macOS'
+        run: brew install ffmpeg
       - name: ffmpeg version
         run: ffmpeg -hide_banner -version
       - run: npm ci
