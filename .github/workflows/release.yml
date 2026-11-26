@@ -1,0 +1,132 @@
+name: Release
+
+# Kích hoạt khi đẩy tag phiên bản (vd v0.1.0). Chạy lại toàn bộ CI, chỉ build khi CI xanh,
+# rồi tạo GitHub Release kèm installer + SHA256SUMS. Bản phát hành CHƯA ký số / notarize
+# trừ khi đã cấu hình secrets (xem docs/RELEASE.md).
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag đã tồn tại để build lại (vd v0.1.0)"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    name: Build ${{ matrix.name }}
+    needs: ci
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows-x64
+            args: --bundles nsis,msi
+          - os: macos-latest
+            name: macos-universal
+            args: --target universal-apple-darwin --bundles app,dmg
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - uses: Swatinem/rust-cache@v2
+      - run: npm ci
+      - run: npm run build -w apps/web
+      - name: Configure macOS signing (chỉ khi có secrets)
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -n "$APPLE_SIGNING_IDENTITY" ] && [ -n "$APPLE_CERTIFICATE" ]; then
+            for v in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+              echo "::add-mask::${!v}"
+              { echo "$v<<__EOF__"; echo "${!v}"; echo "__EOF__"; } >> "$GITHUB_ENV"
+            done
+            echo "Ký mã + notarize: BẬT"
+          else
+            echo "Ký mã + notarize: TẮT (chưa cấu hình secrets) — phát hành bản unsigned"
+          fi
+      - name: Build installer (Tauri)
+        working-directory: apps/desktop
+        run: npx tauri build ${{ matrix.args }}
+      - name: Verify universal binary
+        if: runner.os == 'macOS'
+        run: |
+          APP=$(ls -d target/universal-apple-darwin/release/bundle/macos/*.app | head -1)
+          lipo "$APP/Contents/MacOS/doto-skill" -verify_arch x86_64 arm64
+          lipo -info "$APP/Contents/MacOS/doto-skill"
+      - name: Collect artifacts
+        shell: bash
+        run: |
+          mkdir -p dist-release
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            cp target/release/bundle/nsis/*.exe dist-release/
+            cp target/release/bundle/msi/*.msi dist-release/
+          else
+            cp target/universal-apple-darwin/release/bundle/dmg/*.dmg dist-release/
+            APP=$(ls -d target/universal-apple-darwin/release/bundle/macos/*.app | head -1)
+            (cd "$(dirname "$APP")" && ditto -c -k --keepParent "$(basename "$APP")" "$GITHUB_WORKSPACE/dist-release/Doto-Skill_universal.app.zip")
+          fi
+          ls -la dist-release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: dist-release/*
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Checksums
+        working-directory: artifacts
+        run: |
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          NOTES="docs/release/RELEASE_NOTES_${TAG}.md"
+          [ -f "$NOTES" ] || NOTES="docs/release/RELEASE_NOTES_TEMPLATE.md"
+          { cat "$NOTES"; echo; echo '## SHA-256'; echo '```'; cat artifacts/SHA256SUMS.txt; echo '```'; } > notes.md
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" artifacts/* --clobber
+          else
+            gh release create "$TAG" artifacts/* --title "Doto Skill $TAG" --notes-file notes.md
+          fi

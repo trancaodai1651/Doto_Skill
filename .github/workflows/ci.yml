@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "feat/**", "fix/**"]
+  pull_request:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  DOTO_SECRETS: memory
+  DOTO_REQUIRE_FFMPEG: "1"
+
+jobs:
+  web:
+    name: Web (typecheck · lint · unit · e2e)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck -w apps/web
+      - run: npm run lint -w apps/web
+      - run: npm run test -w apps/web
+      - run: npm run build -w apps/web
+      - run: npx playwright install --with-deps chromium
+        working-directory: apps/web
+      - run: npm run e2e -w apps/web
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          retention-days: 7
+
+  rust:
+    name: Rust (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - uses: FedericoCarboni/setup-ffmpeg@v3
+        id: ffmpeg
+      - name: ffmpeg version
+        run: ffmpeg -hide_banner -version
+      - run: npm ci
+      # tauri-build cần apps/web/dist (resource của bundle) khi biên dịch crate desktop
+      - run: npm run build -w apps/web
+      - name: cargo fmt
+        if: runner.os == 'macOS'
+        run: cargo fmt --all --check
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: cargo test (unit + integration, FFmpeg thật)
+        run: cargo test --workspace --locked
+
+  security:
+    name: Secrets & licenses
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - run: npm ci
+      - run: node scripts/secrets-scan.mjs
+      - run: node scripts/license-check.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: third-party-licenses
+          path: target/THIRD_PARTY_LICENSES.tsv
+          retention-days: 30

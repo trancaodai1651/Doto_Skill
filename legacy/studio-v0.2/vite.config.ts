@@ -1,0 +1,23 @@
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+
+const apiPort = Number(process.env.DOTO_SKILL_PORT || 4320);
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    port: 5179,
+    strictPort: false,
+    proxy: {
+      "/api": {
+        target: `http://127.0.0.1:${apiPort}`,
+        changeOrigin: true,
+      },
+    },
+  },
+  build: {
+    outDir: "dist",
+    emptyOutDir: true,
+    sourcemap: false,
+  },
+});

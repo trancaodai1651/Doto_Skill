@@ -1,0 +1,27 @@
+[package]
+name = "doto-media"
+description = "FFmpeg/ffprobe orchestration, encoder probing, render queue"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+doto-core.workspace = true
+doto-system.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+rusqlite.workspace = true
+chrono.workspace = true
+tracing.workspace = true
+which.workspace = true
+walkdir.workspace = true
+sysinfo.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+which.workspace = true
+tokio.workspace = true

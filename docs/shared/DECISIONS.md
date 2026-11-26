@@ -1,0 +1,16 @@
+# DECISIONS — ADR log
+
+| ID | Ngày | Quyết định | Lý do |
+| --- | --- | --- | --- |
+| ADR-001 | 2026-11-26 | Viết lại thành monorepo Rust/Tauri; chuyển bản Node v0.2 vào `legacy/studio-v0.2/` (giữ nguyên mã nguồn, không phát triển tiếp). | Bản v0.2 không có xác thực, cho trình duyệt chạy CLI, đóng gói node.exe ~96 MB; MASTER_PROMPT yêu cầu Rust/Axum, SQLite, RBAC, OS vault. Di chuyển thay vì xoá để không phá hoại công việc cũ. |
+| ADR-002 | 2026-11-26 | Server chạy **in-process** trong app Tauri (không sidecar riêng), có thêm binary headless `doto-server` cho dev/CI/E2E. | Một tiến trình, chia sẻ state, không cần IPC; chạy nền qua tray. Headless giúp test tự động và chạy máy chủ không giao diện. |
+| ADR-003 | 2026-11-26 | Hai listener: **Control** (127.0.0.1, ngẫu nhiên, chỉ cửa sổ desktop) và **Public** (Off/Localhost/LAN do người dùng bật). Route điều khiển máy chỉ tồn tại trên Control. | Đảm bảo trình duyệt từ xa không bao giờ chạy lệnh/đọc filesystem host kể cả khi là Owner; dừng Public server không làm mất UI desktop. |
+| ADR-004 | 2026-11-26 | Đăng nhập desktop bằng **token một lần** trong URL fragment → phiên `hostControl`. | Fragment không gửi qua mạng/log; không cần Tauri IPC; token tiêu thụ ngay. |
+| ADR-005 | 2026-11-26 | SQLite qua `rusqlite` (bundled) + migration tự viết bằng `PRAGMA user_version`; mọi truy vấn qua `spawn_blocking`. | Ít phụ thuộc, biên dịch nhanh hơn sqlx, migration minh bạch, backup online API. |
+| ADR-006 | 2026-11-26 | Bí mật (GitHub token, tunnel token) chỉ lưu OS vault qua crate `keyring` (Keychain / Credential Manager); `DOTO_SECRETS=memory` cho test/CI. | Yêu cầu không plaintext trong SQLite/Git. |
+| ADR-007 | 2026-11-26 | Profile tài nguyên tác động **admission control** của scheduler (số job, thread FFmpeg, ngưỡng CPU/RAM, phiên GPU, chu kỳ đo) thay vì semaphore cố định. | Đổi profile áp dụng ngay không restart; có backpressure theo tải thật, không đói job. |
+| ADR-008 | 2026-11-26 | Probe encoder phần cứng bằng **encode thử 1 giây** (`testsrc2` → null), không suy từ tên GPU. | Trên máy dev: QSV/AMF được biên dịch trong FFmpeg nhưng không chạy được; NVENC chạy được. |
+| ADR-009 | 2026-11-26 | Không đóng gói FFmpeg; người dùng cài từ nguồn chính thức hoặc trỏ đường dẫn. | Tránh nghĩa vụ GPL/nonfree khi phân phối; bản Gyan full build có cờ `gpl`. |
+| ADR-010 | 2026-11-26 | Cài skill sang provider bằng **sao chép + marker**, không symlink/junction. | Gỡ an toàn (chỉ xoá thư mục có marker khớp), không phụ thuộc quyền tạo symlink trên Windows, không ghi đè thư mục người dùng. |
+| ADR-011 | 2026-11-26 | Cài cloudflared trên Windows bằng tải asset GitHub Release chính thức + kiểm SHA-256 (digest/release notes) + chữ ký Authenticode Cloudflare, đặt trong `<data>/bin` (không cần admin). macOS dùng Homebrew. | Winget ID không có trong tài liệu chính thức; tránh yêu cầu quyền elevated. |
+| ADR-012 | 2026-11-26 | Cổng mặc định public server 4380; danh sách interface kèm `scope` và cảnh báo IP public. | 4320 bị bản legacy chiếm; máy dev có NIC với IP public → bind 0.0.0.0 sẽ lộ Internet. |

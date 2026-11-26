@@ -1,0 +1,3 @@
+@AGENTS.md
+@MEMORY.md
+@HANDOFF.md

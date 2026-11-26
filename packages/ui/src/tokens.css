@@ -1,0 +1,86 @@
+/* Doto Skill design tokens. Light is default; dark via [data-theme="dark"]
+   or, when no explicit theme is set, via prefers-color-scheme. */
+:root,
+:root[data-theme='light'] {
+  color-scheme: light;
+  --doto-bg: #f6f7f9;
+  --doto-surface: #ffffff;
+  --doto-surface-2: #eef0f4;
+  --doto-line: #d9dde5;
+  --doto-fg: #151922;
+  --doto-muted: #5a6273;
+  --doto-primary: #1f5eff;
+  --doto-primary-hover: #194bd0;
+  --doto-primary-fg: #ffffff;
+  --doto-success: #127a3d;
+  --doto-success-bg: #e3f5ea;
+  --doto-warning: #8a5a00;
+  --doto-warning-bg: #fff3d6;
+  --doto-danger: #c02626;
+  --doto-danger-hover: #a01d1d;
+  --doto-danger-bg: #fde7e7;
+  --doto-info: #1f5eff;
+  --doto-info-bg: #e5edff;
+  --doto-overlay: rgb(10 14 22 / 0.5);
+  --doto-focus: #1f5eff;
+  --doto-radius: 10px;
+  --doto-radius-sm: 6px;
+  --doto-shadow: 0 1px 2px rgb(16 24 40 / 0.06), 0 4px 16px rgb(16 24 40 / 0.06);
+  --doto-shadow-lg: 0 12px 40px rgb(16 24 40 / 0.22);
+  --doto-font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --doto-mono: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --doto-bg: #0e1117;
+  --doto-surface: #161b24;
+  --doto-surface-2: #1e2531;
+  --doto-line: #2c3442;
+  --doto-fg: #e7eaf0;
+  --doto-muted: #9aa3b5;
+  --doto-primary: #5b8cff;
+  --doto-primary-hover: #7aa2ff;
+  --doto-primary-fg: #0b0f17;
+  --doto-success: #4ade80;
+  --doto-success-bg: #12301f;
+  --doto-warning: #fbbf24;
+  --doto-warning-bg: #3a2c08;
+  --doto-danger: #f87171;
+  --doto-danger-hover: #fca5a5;
+  --doto-danger-bg: #3b1515;
+  --doto-info: #7aa2ff;
+  --doto-info-bg: #18233d;
+  --doto-overlay: rgb(0 0 0 / 0.6);
+  --doto-focus: #7aa2ff;
+  --doto-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 4px 16px rgb(0 0 0 / 0.3);
+  --doto-shadow-lg: 0 12px 40px rgb(0 0 0 / 0.6);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+    --doto-bg: #0e1117;
+    --doto-surface: #161b24;
+    --doto-surface-2: #1e2531;
+    --doto-line: #2c3442;
+    --doto-fg: #e7eaf0;
+    --doto-muted: #9aa3b5;
+    --doto-primary: #5b8cff;
+    --doto-primary-hover: #7aa2ff;
+    --doto-primary-fg: #0b0f17;
+    --doto-success: #4ade80;
+    --doto-success-bg: #12301f;
+    --doto-warning: #fbbf24;
+    --doto-warning-bg: #3a2c08;
+    --doto-danger: #f87171;
+    --doto-danger-hover: #fca5a5;
+    --doto-danger-bg: #3b1515;
+    --doto-info: #7aa2ff;
+    --doto-info-bg: #18233d;
+    --doto-overlay: rgb(0 0 0 / 0.6);
+    --doto-focus: #7aa2ff;
+    --doto-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 4px 16px rgb(0 0 0 / 0.3);
+    --doto-shadow-lg: 0 12px 40px rgb(0 0 0 / 0.6);
+  }
+}

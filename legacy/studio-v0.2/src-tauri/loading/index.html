@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Doto Skill Studio</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #070a12;
+        color: #f8fafc;
+        font-family: system-ui, -apple-system, sans-serif;
+        gap: 14px;
+      }
+      .logo {
+        width: 58px;
+        height: 58px;
+        border-radius: 16px;
+        background: linear-gradient(135deg, #f97316, #dc2626);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        font-size: 22px;
+        box-shadow: 0 12px 32px rgba(249, 115, 22, 0.35);
+      }
+      #msg {
+        color: #94a3b8;
+        font-size: 14px;
+        max-width: 520px;
+        text-align: center;
+        line-height: 1.5;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="logo">DT</div>
+    <div style="font-weight: 800; font-size: 18px">Doto Skill Studio</div>
+    <div id="msg">Đang khởi động máy chủ điều phối Skill & AI...</div>
+    <script>
+      window.studioFailed = function (err) {
+        var el = document.getElementById("msg");
+        el.style.color = "#fca5a5";
+        el.textContent = err;
+      };
+    </script>
+  </body>
+</html>

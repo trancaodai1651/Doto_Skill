@@ -1,0 +1,31 @@
+[package]
+name = "doto-skills"
+description = "Skill sources: folder scanning, GitHub import, validation, provider mapping"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+doto-core.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+tokio.workspace = true
+rusqlite.workspace = true
+chrono.workspace = true
+tracing.workspace = true
+walkdir.workspace = true
+notify.workspace = true
+notify-debouncer-full.workspace = true
+reqwest.workspace = true
+flate2.workspace = true
+tar.workspace = true
+sha2.workspace = true
+hex.workspace = true
+regex.workspace = true
+futures.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

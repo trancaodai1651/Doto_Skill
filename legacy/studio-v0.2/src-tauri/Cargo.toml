@@ -1,0 +1,18 @@
+[package]
+name = "doto-skill"
+version = "0.2.0"
+description = "Doto Skill Studio — Ứng dụng Windows, macOS Universal & Web kết nối bộ Skill dựng video với Claude Code, Codex và Antigravity"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde_json = "1"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

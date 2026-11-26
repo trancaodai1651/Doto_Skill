@@ -1,0 +1,32 @@
+{
+  "name": "doto-skill",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Doto Skill — desktop + local web server + AI CLI manager + video library",
+  "workspaces": [
+    "packages/*",
+    "apps/web"
+  ],
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "dev:server": "cargo run -p doto-server --bin doto-server -- --control-port 4319 --data-dir .dev-data",
+    "dev:web": "npm run dev -w apps/web",
+    "format": "node scripts/task.mjs format",
+    "format:check": "node scripts/task.mjs format-check",
+    "lint": "node scripts/task.mjs lint",
+    "typecheck": "node scripts/task.mjs typecheck",
+    "unit-test": "node scripts/task.mjs unit-test",
+    "integration-test": "node scripts/task.mjs integration-test",
+    "e2e": "node scripts/task.mjs e2e",
+    "build": "node scripts/task.mjs build",
+    "release-check": "node scripts/task.mjs release-check",
+    "desktop:dev": "node scripts/task.mjs desktop-dev",
+    "desktop:build": "node scripts/task.mjs desktop-build",
+    "handoff": "node scripts/update-handoff.mjs"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.6"
+  }
+}

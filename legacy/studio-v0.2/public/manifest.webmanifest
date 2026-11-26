@@ -1,0 +1,9 @@
+{
+  "name": "Doto Skill Studio",
+  "short_name": "Doto Skill",
+  "description": "Multi-AI Video Production Studio for Antigravity, Claude Code & Codex (PC, iPad, iPhone, Android)",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#070a12",
+  "theme_color": "#f97316"
+}
