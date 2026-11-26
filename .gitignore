@@ -1,0 +1,53 @@
+# deps / build
+node_modules/
+dist/
+target/
+apps/web/test-results/
+apps/web/playwright-report/
+apps/web/blob-report/
+*.tsbuildinfo
+
+# legacy heavy artifacts (source is kept, binaries are not)
+legacy/**/node_modules/
+legacy/**/.desktop/
+legacy/**/dist/
+legacy/**/src-tauri/target/
+legacy/**/src-tauri/gen/
+
+# local runtime data — never commit
+.dev-data/
+.e2e-data/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.db
+
+# secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+cert.json
+credentials.json
+.claude/settings.local.json
+
+# media (tests generate their own fixtures)
+*.mp4
+*.mov
+*.mkv
+*.webm
+!crates/media/tests/fixtures/README.md
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Tauri generated
+apps/desktop/src-tauri/gen/
