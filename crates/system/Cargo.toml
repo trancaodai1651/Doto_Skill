@@ -1,0 +1,20 @@
+[package]
+name = "doto-system"
+description = "Hardware probe, metrics, resource profiles and admission control"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+doto-core.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+sysinfo.workspace = true
+chrono.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["test-util"] }

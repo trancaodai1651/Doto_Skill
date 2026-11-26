@@ -1,0 +1,101 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+@theme inline {
+  --color-bg: var(--doto-bg);
+  --color-surface: var(--doto-surface);
+  --color-surface-2: var(--doto-surface-2);
+  --color-line: var(--doto-line);
+  --color-fg: var(--doto-fg);
+  --color-muted: var(--doto-muted);
+  --color-primary: var(--doto-primary);
+  --color-success: var(--doto-success);
+  --color-success-bg: var(--doto-success-bg);
+  --color-warning: var(--doto-warning);
+  --color-warning-bg: var(--doto-warning-bg);
+  --color-danger: var(--doto-danger);
+  --color-danger-bg: var(--doto-danger-bg);
+  --color-info-bg: var(--doto-info-bg);
+  --font-sans: var(--doto-font);
+  --font-mono: var(--doto-mono);
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--doto-bg);
+  color: var(--doto-fg);
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+a:focus-visible,
+button:focus-visible,
+[tabindex]:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--doto-focus);
+  outline-offset: 2px;
+}
+
+.skip-link {
+  position: absolute;
+  left: -999px;
+  top: 0.5rem;
+  z-index: 100;
+}
+.skip-link:focus {
+  left: 0.5rem;
+}
+
+.pb-safe {
+  padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+}
+@media (min-width: 768px) {
+  .pb-safe {
+    padding-bottom: 2rem;
+  }
+}
+
+.bottom-nav {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+table.data th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--doto-muted);
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--doto-line);
+  white-space: nowrap;
+}
+table.data td {
+  padding: 0.55rem 0.6rem;
+  border-bottom: 1px solid var(--doto-line);
+  vertical-align: top;
+}
+table.data tr.clickable {
+  cursor: pointer;
+}
+table.data tr.clickable:hover {
+  background: var(--doto-surface-2);
+}
+
+/* iOS: avoid input zoom for raw inputs too */
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}

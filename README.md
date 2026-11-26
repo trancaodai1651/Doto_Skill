@@ -5,13 +5,13 @@
 > Trạng thái: **v0.1.0 — bản nền tảng**. Xem chức năng đã kiểm chứng / còn chờ trong [`docs/shared/TASK_BOARD.md`](docs/shared/TASK_BOARD.md).
 
 ## Tính năng
-- **Desktop + web server:** cửa sổ desktop (Tauri v2) + máy chủ Axum chạy cùng tiến trình; bật/tắt/khởi động lại web server, chế độ Off / Localhost / LAN, QR, chạy nền ở khay hệ thống, khởi động cùng hệ điều hành (tuỳ chọn).
-- **Bảo mật:** Owner / Viewer, mật khẩu Argon2id, cookie HttpOnly + SameSite, CSRF, rate limit, mã ghép nối thiết bị hết hạn, thu hồi thiết bị, IP allowlist, nhật ký kiểm toán. Trình duyệt từ xa **không bao giờ** chạy được lệnh/CLI hay đọc ổ đĩa của máy chủ.
+- **Bản App & Bản Web đồng nhất 100% tính năng:** cửa sổ desktop (Tauri v2) + máy chủ Axum chạy cùng tiến trình; bản Web kết nối tới máy chủ của bản App (cùng địa chỉ LAN/Tunnel hoặc cấu hình URL máy chủ từ xa) để dùng trực tiếp phần cứng CPU/RAM/GPU của máy chủ với đầy đủ tính năng như bản App. Hỗ trợ bật/tắt/khởi động lại web server, chế độ Off / Localhost / LAN, QR, chạy nền ở khay hệ thống, khởi động cùng hệ điều hành.
+- **Bảo mật:** Owner / Viewer, mật khẩu Argon2id, cookie HttpOnly + SameSite=Strict + CSRF (hoặc Bearer + media ticket ngắn hạn khi kết nối chéo miền), rate limit, mã ghép nối thiết bị hết hạn, thu hồi thiết bị, IP allowlist, nhật ký kiểm toán. Không có API chạy lệnh shell hay đọc ổ đĩa tuỳ ý; Viewer chỉ xem/tải video được chia sẻ.
 - **Cloudflare Tunnel:** Quick Tunnel (thử nghiệm) và Named Tunnel bằng token (lưu trong Keychain/Credential Manager), không mở cổng router.
-- **AI CLI:** dò tìm, phiên bản, trạng thái đăng nhập, cài từ nguồn chính thức sau khi bạn xác nhận lệnh, chẩn đoán.
-- **Phần cứng & hiệu năng:** CPU/RAM/GPU/ổ đĩa/pin thật; probe encoder NVENC / Quick Sync / AMF / VideoToolbox bằng encode thử; profile **Nhẹ / Cân bằng / Tối đa** thay đổi số job, luồng FFmpeg và ngưỡng tải ngay lập tức.
+- **AI CLI:** dò tìm, phiên bản, trạng thái đăng nhập, cài từ nguồn chính thức theo allowlist sau khi xác nhận lệnh, chẩn đoán.
+- **Phần cứng & hiệu năng:** CPU/RAM/GPU/ổ đĩa/pin thật; probe & benchmark 720p encoder NVENC / Quick Sync / AMF / VideoToolbox bằng encode thử; profile **Nhẹ / Cân bằng / Tối đa** thay đổi số job, luồng FFmpeg và ngưỡng tải ngay lập tức.
 - **Skills:** khởi đầu **0 skill**; thêm không giới hạn thư mục và repo GitHub (public/private), theo dõi thay đổi, xem diff trước khi cập nhật, pin commit, cài sang Claude / Codex / Antigravity theo đúng thư mục chính thức. Skill là dữ liệu không tin cậy — không bao giờ tự chạy script.
-- **Video:** quét thư mục, metadata + thumbnail, trim/ghép nhiều đoạn → MP4 H.264/AAC (GPU khi có), tiến độ/ETA thật, huỷ/thử lại; thư viện web responsive với phát/tua (HTTP Range) và tải về có kiểm soát quyền, link chia sẻ có hạn.
+- **Video & dữ liệu:** quét thư mục, metadata + thumbnail, trim/ghép nhiều đoạn → MP4 H.264/AAC (GPU khi có), tiến độ/ETA thật, huỷ/thử lại; thư viện web responsive với phát/tua (HTTP Range), tải về có kiểm soát quyền, danh sách & thu hồi link chia sẻ có hạn; sao lưu & khôi phục cơ sở dữ liệu SQLite trực tuyến.
 
 ## Cài đặt (người dùng)
 Tải installer tại trang [Releases](https://github.com/trancaodai1651/Doto_Skill/releases) và đối chiếu `SHA256SUMS.txt`:
