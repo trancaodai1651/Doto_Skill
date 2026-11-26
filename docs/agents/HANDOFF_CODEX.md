@@ -27,31 +27,30 @@ cargo test -p doto-server
 ```
 
 <!-- AUTO:START (scripts/update-handoff.mjs — không sửa tay khối này) -->
-**Cập nhật tự động:** 2026-11-26T08:59:32.803Z bởi `antigravity`
-- Branch: `feat/initial-platform` · HEAD: `0d13454be22fd50a44a29157c6a61531287b6719`
+**Cập nhật tự động:** 2026-11-26T09:27:10.962Z bởi `antigravity`
+- Branch: `main` · HEAD: `0592add8c0983466fc6f4000efe0e77481cff7c7`
 - Working tree: sạch
-- Tóm tắt phiên: Đồng bộ 100% tính năng bản App & bản Web (Owner dùng phần cứng server bản App), thêm kết nối URL server, CORS Bearer + media ticket, sao lưu/khôi phục SQLite, benchmark encoder 720p, danh sách share link; 101 test Rust + 33 unit + 4 E2E xanh, đóng gói installer Windows
-- NEXT_ACTION: Chờ CI Windows + macOS xanh trên PR #1 → merge main → tag v0.1.0 → kiểm chứng GitHub Release installers & SHA256SUMS
+- Tóm tắt phiên: Hoàn tất P0–P6 & đồng bộ 100% tính năng bản App ↔ bản Web (Owner kết nối phần cứng server bản App); merge PR #1 vào main và phát hành thành công GitHub Release v0.1.0 (Win NSIS/MSI + macOS universal DMG/app.zip + SHA256SUMS)
+- NEXT_ACTION: Kiểm thử thực tế trên thiết bị di động cùng Wi-Fi & máy Mac vật lý; cấu hình DOTO_GITHUB_CLIENT_ID (Device Flow), Cloudflare Named Tunnel + Access và chứng chỉ ký mã khi chủ repo cung cấp
 
 **Commit gần nhất:**
+- 0592add docs(release): ghi nhận kết quả CI/Release v0.1.0 và checksum installers (2026-11-26)
+- 12084d4 Merge pull request #1 from trancaodai1651/feat/initial-platform (2026-11-26)
+- 66c2ecb docs(handoff): đồng bộ bộ nhớ chung và 3 file bàn giao AI (antigravity) (2026-11-26)
 - 0d13454 feat(parity): đồng bộ 100% tính năng App & Web qua server phần cứng máy chủ, CORS Bearer, backup/restore & benchmark (2026-11-26)
 - 057c032 feat(web): UI link chia sẻ video có hạn (tạo có xác nhận, sao chép, thu hồi); cập nhật bộ nhớ chung + handoff (2026-11-26)
-- 347ef95 fix(macos): clippy manual_pattern_char_comparison trong probe pin; bỏ field workspace không dùng (2026-11-26)
-- a9ef727 build: release profile thin LTO; ghi kết quả test + build installer cục bộ (2026-11-26)
-- 0f68ba3 ci: cài FFmpeg trên macOS bằng Homebrew (setup-ffmpeg không hỗ trợ runner macOS ARM) (2026-11-26)
 
 **Lần chạy test gần nhất:**
 Máy: Windows 11 Pro (x86_64, i7-6800K, 32 GB, RTX 2070 SUPER) · Rust 1.99.1 · Node 26.13 · FFmpeg 9.0.2 (gyan full) · 2026-11-26 · agent: antigravity
 
-| Lệnh | Kết quả |
+| Lệnh / Workflow | Kết quả |
 | --- | --- |
-| `cargo test --workspace` (DOTO_SECRETS=memory, DOTO_REQUIRE_FFMPEG=1) | ✅ 101 test xanh: core 13 · system 8 · media 13 + render_e2e 3 (FFmpeg thật) · skills 18 + service 2 · integrations 12 · server 10 + api_security 2 (kiểm chứng đồng bộ Owner App↔Web, CORS Bearer + media ticket, xác minh binary FFmpeg, sao lưu/khôi phục SQLite, chặn Viewer 403/404) |
-| `cargo clippy --workspace --all-targets -- -D warnings` | ✅ sạch (0 cảnh báo) |
-| `cargo fmt --all --check` | ✅ |
+| `cargo test --workspace` (DOTO_SECRETS=memory, DOTO_REQUIRE_FFMPEG=1) | ✅ 101/101 test xanh: core 13 · system 8 · media 13 + render_e2e 3 (FFmpeg thật) · skills 18 + service 2 · integrations 12 · server 10 + api_security 2 (kiểm chứng đồng bộ Owner App↔Web, CORS Bearer + media ticket, xác minh binary FFmpeg, sao lưu/khôi phục SQLite, chặn Viewer 403/404) |
+| `cargo clippy --workspace --all-targets -- -D warnings` + `cargo fmt --all --check` | ✅ sạch (0 cảnh báo) |
 | `npm run typecheck/lint/test -w apps/web` | ✅ 33/33 unit test (Vitest) |
 | `npm run e2e -w apps/web` (Playwright Chromium) | ✅ 4/4 (`onboarding.spec.ts`, `skills.spec.ts`, `gallery.spec.ts`, `web-parity.spec.ts`) |
-| `node scripts/secrets-scan.mjs` | ✅ 216 file, không phát hiện bí mật |
-| `node scripts/license-check.mjs` | ✅ 639 phụ thuộc, không copyleft bắt buộc |
-| `npm run desktop:build -- --bundles nsis,msi` (Windows x64, local) | ✅ `Doto Skill_0.1.0_x64-setup.exe` 5.83 MiB (sha256 `dc4a1e38…74b83`) · `Doto Skill_0.1.0_x64_en-US.msi` 8.47 MiB (sha256 `42f0cb39…16bbe`) |
-| CI GitHub (Windows + macOS + Ubuntu) | đang chạy / kiểm chứng trên PR #1 & Release `v0.1.0` |
+| `node scripts/secrets-scan.mjs` + `node scripts/license-check.mjs` | ✅ 216 file sạch bí mật · 639 phụ thuộc không copyleft bắt buộc |
+| `npm run desktop:build -- --bundles nsis,msi` (Windows x64, local) | ✅ `Doto Skill_0.1.0_x64-setup.exe` 5.83 MiB (`dc4a1e38…74b83`) · `Doto Skill_0.1.0_x64_en-US.msi` 8.47 MiB (`42f0cb39…16bbe`) |
+| GitHub Actions CI (`45787940484`, PR #1) | ✅ Ubuntu Web/E2E (1m1s) · Secrets & licenses (33s) · macOS Rust+FFmpeg (1m21s) · Windows Rust+FFmpeg (2m48s) |
+| GitHub Actions Release `v0.1.0` (`45788563182`, tag `12084d4677`) | ✅ CI xanh · `windows-x64` (7m2s) · `macos-universal` `lipo` x86_64+arm64 (11m19s) · xuất bản https://github.com/trancaodai1651/Doto_Skill/releases/tag/v0.1.0 (`Doto.Skill_0.1.0_x64-setup.exe` `c51500db…46af`, `Doto.Skill_0.1.0_x64_en-US.msi` `a53ab770…658d`, `Doto.Skill_0.1.0_universal.dmg` `bb1f8a6f…fa9b`, `Doto-Skill_universal.app.zip` `e37f9ee4…85fb`, `SHA256SUMS.txt`, `THIRD_PARTY_LICENSES.tsv`) |
 <!-- AUTO:END -->
