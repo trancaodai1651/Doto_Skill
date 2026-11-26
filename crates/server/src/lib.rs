@@ -1,8 +1,9 @@
 //! doto-server: máy chủ web/API cục bộ của Doto Skill (Axum + Tokio).
 //!
 //! Hai listener dùng chung `AppState`:
-//! - **Control** `127.0.0.1:<ngẫu nhiên>`: luôn bật khi app chạy, chỉ cửa sổ desktop dùng (route [H]).
-//! - **Public**: Off / Localhost / LAN do người dùng bật/tắt; không có route điều khiển máy host.
+//! - **Control** `127.0.0.1:<ngẫu nhiên>`: luôn bật khi app desktop chạy, dùng token một lần cho cửa sổ desktop.
+//! - **Public**: Off / Localhost / LAN do người dùng bật/tắt; phục vụ giao diện Web & API với đầy đủ chức năng cho Owner
+//!   (chạy trên phần cứng máy chủ qua allowlist an toàn, không thực thi shell/FS tuỳ ý) và giới hạn chặt RBAC cho Viewer.
 
 pub mod auth;
 pub mod error;
@@ -10,12 +11,12 @@ pub mod public;
 pub mod routes;
 pub mod stream;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex, RwLock};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use axum::extract::{ConnectInfo, Request, State};
 use axum::http::{header, HeaderValue, Method, StatusCode};
@@ -48,6 +49,7 @@ pub struct AppState {
     pub public: PublicServer,
     pub control_addr: RwLock<Option<SocketAddr>>,
     desktop_tokens: Mutex<HashSet<String>>,
+    media_tickets: Mutex<HashMap<String, (String, Instant)>>,
     pub rate: RateLimiter,
     pub started: Instant,
     pub web_root: Option<PathBuf>,
@@ -112,6 +114,7 @@ impl AppState {
             public: PublicServer::default(),
             control_addr: RwLock::new(None),
             desktop_tokens: Mutex::new(HashSet::new()),
+            media_tickets: Mutex::new(HashMap::new()),
             rate: RateLimiter::default(),
             started: Instant::now(),
             web_root: opts.web_root,
@@ -151,6 +154,35 @@ impl AppState {
 
     pub fn consume_desktop_token(&self, t: &str) -> bool {
         self.desktop_tokens.lock().unwrap().remove(&doto_core::sha256_hex(t))
+    }
+
+    /// Vé ngắn hạn (10 phút) chỉ dùng cho GET media/QR/SSE khi bản Web kết nối chéo miền (cross-origin Bearer)
+    /// tới máy chủ của bản App — giúp không bao giờ đưa session token vào URL.
+    pub fn issue_media_ticket(&self, session_id: &str) -> String {
+        let raw = doto_core::random_token(24);
+        let hash = doto_core::sha256_hex(&raw);
+        let now = Instant::now();
+        let mut g = self.media_tickets.lock().unwrap();
+        g.retain(|_, (_, exp)| *exp > now);
+        if g.len() > 2048 {
+            g.clear();
+        }
+        g.insert(hash, (session_id.to_string(), now + Duration::from_secs(600)));
+        raw
+    }
+
+    pub fn verify_media_ticket(&self, raw: &str) -> Option<String> {
+        let hash = doto_core::sha256_hex(raw);
+        let now = Instant::now();
+        let mut g = self.media_tickets.lock().unwrap();
+        match g.get(&hash) {
+            Some((sid, exp)) if *exp > now => Some(sid.clone()),
+            Some(_) => {
+                g.remove(&hash);
+                None
+            }
+            None => None,
+        }
     }
 
     pub async fn probe_hardware(&self) -> anyhow::Result<HardwareInfo> {
@@ -284,14 +316,26 @@ async fn security_headers(req: Request, next: Next) -> Response {
     h.insert(
         "content-security-policy",
         HeaderValue::from_static(
-            "default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+            "default-src 'self'; img-src 'self' data: blob: http: https:; media-src 'self' blob: http: https:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' http: https:; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
         ),
     );
     res
 }
 
-/// Gắn loại listener, kiểm tra Origin cho request thay đổi trạng thái (chống CSRF chéo site),
-/// IP allowlist cho listener Public, chỉ nhận loopback cho Control, đếm kết nối hoạt động.
+fn attach_cors(res: &mut Response, origin: Option<&str>) {
+    let Some(origin) = origin else { return };
+    if let Ok(val) = HeaderValue::from_str(origin) {
+        let h = res.headers_mut();
+        // Không đặt Access-Control-Allow-Credentials: kết nối cross-origin dùng Authorization: Bearer
+        // nên trình duyệt không bao giờ tự đính kèm cookie ngầm (miễn nhiễm CSRF chéo miền).
+        h.insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, val);
+        h.insert(header::VARY, HeaderValue::from_static("Origin"));
+        h.insert(header::ACCESS_CONTROL_EXPOSE_HEADERS, HeaderValue::from_static("Content-Range, Accept-Ranges, Content-Length, Content-Disposition"));
+    }
+}
+
+/// Gắn loại listener, xử lý CORS cho bản Web kết nối từ xa qua Bearer token, kiểm tra Origin cho request
+/// dùng cookie (chống CSRF chéo site), IP allowlist cho listener Public, chỉ nhận loopback cho Control.
 async fn guard(State((st, kind)): State<(Arc<AppState>, ListenerKind)>, mut req: Request, next: Next) -> Response {
     let peer = req.extensions().get::<ConnectInfo<SocketAddr>>().map(|c| c.0);
     match kind {
@@ -307,21 +351,40 @@ async fn guard(State((st, kind)): State<(Arc<AppState>, ListenerKind)>, mut req:
             }
         }
     }
-    if !matches!(*req.method(), Method::GET | Method::HEAD | Method::OPTIONS) {
-        if let Some(origin) = req.headers().get(header::ORIGIN).and_then(|v| v.to_str().ok()) {
-            let host = req.headers().get(header::HOST).and_then(|v| v.to_str().ok()).unwrap_or("");
-            let o = origin.trim_start_matches("https://").trim_start_matches("http://");
-            if o != host {
-                return error::ApiError::forbidden("Origin không hợp lệ").into_response();
-            }
+
+    let origin = req.headers().get(header::ORIGIN).and_then(|v| v.to_str().ok()).map(String::from);
+    let host = req.headers().get(header::HOST).and_then(|v| v.to_str().ok()).unwrap_or("");
+    let cross_origin = origin.as_deref().map(|o| o.trim_start_matches("https://").trim_start_matches("http://") != host).unwrap_or(false);
+
+    if *req.method() == Method::OPTIONS {
+        let mut res = StatusCode::NO_CONTENT.into_response();
+        attach_cors(&mut res, origin.as_deref());
+        let h = res.headers_mut();
+        h.insert(header::ACCESS_CONTROL_ALLOW_METHODS, HeaderValue::from_static("GET, POST, PUT, PATCH, DELETE, OPTIONS"));
+        h.insert(header::ACCESS_CONTROL_ALLOW_HEADERS, HeaderValue::from_static("Content-Type, Authorization, X-CSRF-Token, Range"));
+        h.insert(header::ACCESS_CONTROL_MAX_AGE, HeaderValue::from_static("600"));
+        return res;
+    }
+
+    if !matches!(*req.method(), Method::GET | Method::HEAD | Method::OPTIONS) && cross_origin {
+        let path = req.uri().path();
+        let has_bearer = req.headers().get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()).map(|v| v.starts_with("Bearer ")).unwrap_or(false);
+        let public_bearer_auth_route = matches!(path, "/api/auth/login" | "/api/auth/pair");
+        // Chặn tuyệt đối cross-origin nếu không dùng Bearer token (hoặc đang gọi /api/auth/desktop, /api/auth/setup).
+        if !has_bearer && !public_bearer_auth_route {
+            return error::ApiError::forbidden("Origin không hợp lệ").into_response();
         }
     }
+
     req.extensions_mut().insert(kind);
     let counter = st.public.connections.clone();
     if kind == ListenerKind::Public {
         counter.fetch_add(1, Ordering::Relaxed);
     }
-    let res = next.run(req).await;
+    let mut res = next.run(req).await;
+    if cross_origin {
+        attach_cors(&mut res, origin.as_deref());
+    }
     if kind != ListenerKind::Public {
         return res;
     }

@@ -3,18 +3,20 @@
 > Đọc trước: `AGENTS.md` → `docs/shared/PROJECT_MEMORY.md` → `docs/shared/ROADMAP.md` → `docs/shared/TASK_BOARD.md` → file này.
 > Sau khi làm: cập nhật `docs/shared/*` rồi `npm run handoff -- --agent codex --summary "..." --next "..."` (đồng bộ cả 3 file handoff).
 
-## Phiên gần nhất (2026-11-26 · claude)
-**Đã làm:** Khởi tạo Doto Skill v0.1.0 trên nền Rust/Tauri/React (P0–P4 đạt; P5/P6 phần lớn). Bản Node v0.2 cũ được giữ tại `legacy/studio-v0.2/`.
+## Phiên gần nhất (2026-11-26 · antigravity)
+**Đã làm:**
+- Đồng bộ đầy đủ 100% tính năng giữa bản App Desktop và bản Web cho Owner (`ADR-013`), kết nối tới phần cứng máy chủ của bản App (hỗ trợ cả cùng miền lẫn chéo miền qua `ServerConnectionBox` + CORS Bearer + `POST /api/auth/ticket`).
+- Đã triển khai `GET /api/videos/:id/shares` + UI danh sách link chia sẻ đang hoạt động, sao lưu & khôi phục SQLite (`GET /api/system/backups`, `POST /api/system/restore`), benchmark encoder 720p (`POST /api/system/ffmpeg/benchmark`), kịch bản Playwright `web-parity.spec.ts` và phát hành GitHub Release `v0.1.0`.
 
-**File/module cốt lõi:** `crates/{core,system,media,skills,integrations,server}`, `apps/desktop/src-tauri`, `apps/web`, `packages/ui`, `scripts/*.mjs`, `.github/workflows/{ci,release}.yml`, `docs/API.md`.
+**File/module cốt lõi:** `crates/{core,system,media,skills,integrations,server}`, `apps/desktop/src-tauri`, `apps/web`, `packages/ui`, `scripts/*.mjs`, `.github/workflows/{ci,release}.yml`, `docs/API.md`, `docs/SECURITY.md`.
 
 **Tests (máy dev Windows 11, 2026-11-26):** xem khối "Lần chạy test gần nhất" bên dưới và `docs/shared/LAST_TEST_RUN.md`.
 
 **Blocker:** B1 OAuth client_id cho GitHub Device Flow · B2 tài khoản Cloudflare để kiểm chứng tunnel thật · B3 chứng chỉ ký mã (chi tiết: `TASK_BOARD.md`).
 
 ## Việc tiếp theo gợi ý cho OpenAI Codex
-1. (Đã xong bởi claude) UI share link — có thể thêm danh sách link đang hoạt động (cần API `GET /api/videos/:id/shares`, chưa có).
-2. Playwright E2E chạy với server Rust thật: khởi động `target/debug/doto-server --data-dir .e2e-data --control-port 0 --token-file .e2e-data/url.txt --web-root apps/web/dist` trong `globalSetup`, dùng URL token để đăng nhập desktop.
+1. Bổ sung project Playwright thứ hai chạy trực tiếp với binary `doto-server` thật trong CI (`target/debug/doto-server --data-dir .e2e-data --control-port 0 --token-file .e2e-data/url.txt --web-root apps/web/dist` trong `globalSetup`).
+2. Bổ sung mDNS (`doto.local`) tuỳ chọn cho chế độ LAN nếu cần khám phá tự động trong mạng nội bộ.
 3. Giữ hợp đồng: mọi thay đổi field API phải sửa đồng thời `apps/web/src/api/types.ts`, handler trong `crates/server/src/routes.rs` và `docs/API.md`.
 
 Cách chạy tiếp:

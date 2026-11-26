@@ -13,11 +13,14 @@ export interface User {
 export interface Me {
   user: User | null;
   csrfToken: string | null;
-  /** true khi phiên được tạo từ cửa sổ desktop (listener nội bộ) → có quyền điều khiển máy host */
+  /** true khi đang chạy trực tiếp trong cửa sổ ứng dụng desktop Tauri (listener Control) */
   hostControl: boolean;
   setupRequired: boolean;
   onboardingCompleted: boolean;
   version: string;
+  hostname?: string | null;
+  /** Chỉ trả về khi bản Web kết nối chéo miền (authMode = "bearer") */
+  sessionToken?: string | null;
 }
 
 export type ProfileId = 'eco' | 'balanced' | 'max';
@@ -101,6 +104,21 @@ export interface EncoderInfo {
   available: boolean; // có trong `ffmpeg -encoders`
   working: boolean; // đã encode thử thành công
   error: string | null;
+}
+
+export interface EncoderBenchmark {
+  name: string;
+  kind: 'software' | 'hardware' | string;
+  vendor: string;
+  frames: number;
+  elapsedMs: number;
+  fps: number;
+}
+
+export interface BackupEntry {
+  file: string;
+  sizeBytes: number;
+  createdAt: string;
 }
 
 export interface FfmpegStatus {
@@ -368,7 +386,8 @@ export interface AuditEvent {
 export interface ShareLink {
   id: string;
   videoId: string;
-  url: string;
+  url: string | null;
+  createdAt?: string;
   expiresAt: string;
 }
 

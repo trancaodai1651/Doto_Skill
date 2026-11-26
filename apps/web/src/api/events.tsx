@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { api } from './client';
+import { api, http } from './client';
 import type { Metrics, ServerEvent } from './types';
 
 export type EventType = ServerEvent['type'];
@@ -111,10 +111,10 @@ export function EventsProvider({ children, role }: { children: ReactNode; role: 
       pollTimer = setInterval(() => void poll(), POLL_MS);
     };
 
-    if (typeof EventSource === 'undefined') {
+    if (typeof EventSource === 'undefined' || (http.isCrossOrigin() && !http.getMediaTicket())) {
       startPolling();
     } else {
-      es = new EventSource('/api/events', { withCredentials: true });
+      es = new EventSource(http.mediaUrl('/api/events'), { withCredentials: !http.isCrossOrigin() });
       const onMsg = (name: string) => (e: MessageEvent<string>) => {
         const ev = parseServerEvent(name, e.data);
         if (ev) dispatch(ev);

@@ -18,7 +18,7 @@ use tokio_util::sync::CancellationToken;
 use doto_core::{events::EventBus, jobs, paths::AppPaths, settings, Db};
 use doto_system::ResourceManager;
 
-pub use encoders::{EncoderInfo, EncoderProbe};
+pub use encoders::{EncoderBenchmark, EncoderInfo, EncoderProbe};
 pub use library::VideoAsset;
 
 #[derive(Debug, Clone, Serialize, Default)]
@@ -142,6 +142,18 @@ impl MediaService {
         settings::set(&self.db, settings::KEY_ENCODERS, &probe).await?;
         *self.encoders.write().unwrap() = probe;
         Ok(self.status())
+    }
+
+    pub async fn benchmark_encoders(&self) -> Result<Vec<EncoderBenchmark>, MediaError> {
+        let info = self.ffmpeg_info()?;
+        let mut probe = self.encoders.read().unwrap().clone();
+        if probe.encoders.is_empty() {
+            probe = encoders::probe_all(&info.ffmpeg_path, Some(info.version.clone())).await?;
+            settings::set(&self.db, settings::KEY_ENCODERS, &probe).await?;
+            *self.encoders.write().unwrap() = probe.clone();
+        }
+        let threads = self.rm.limits().ffmpeg_threads;
+        Ok(encoders::benchmark_working(&info.ffmpeg_path, &probe, threads).await)
     }
 
     pub fn status(&self) -> FfmpegStatus {

@@ -3,19 +3,22 @@
 > Đọc trước: `AGENTS.md` → `docs/shared/PROJECT_MEMORY.md` → `docs/shared/ROADMAP.md` → `docs/shared/TASK_BOARD.md` → file này.
 > Sau khi làm: cập nhật `docs/shared/*` rồi `npm run handoff -- --agent antigravity --summary "..." --next "..."` (đồng bộ cả 3 file handoff).
 
-## Phiên gần nhất (2026-11-26 · claude)
-**Đã làm:** Khởi tạo Doto Skill v0.1.0 trên nền Rust/Tauri/React (P0–P4 đạt; P5/P6 phần lớn). Bản Node v0.2 cũ được giữ tại `legacy/studio-v0.2/`.
+## Phiên gần nhất (2026-11-26 · antigravity)
+**Đã làm:**
+- Triển khai **đồng bộ 100% tính năng giữa bản App Desktop và bản Web** cho Chủ sở hữu (`ADR-013`): bản Web kết nối trực tiếp hoặc qua cấu hình địa chỉ máy chủ bản App (`ServerConnectionBox`) để sử dụng phần cứng CPU/RAM/GPU của máy chủ.
+- Bổ sung CORS + `Authorization: Bearer` (không bật credentials → miễn nhiễm CSRF chéo miền) + vé media ngắn hạn (`POST /api/auth/ticket`), sao lưu & khôi phục SQLite trực tuyến (`GET /api/system/backups`, `POST /api/system/restore`), benchmark encoder 720p (`POST /api/system/ffmpeg/benchmark`), danh sách link chia sẻ video (`GET /api/videos/:id/shares`), gợi ý ổ đĩa máy chủ, xác minh binary FFmpeg thật trước khi lưu cấu hình, chống tự khoá khi restart/stop server từ bản Web và sửa lỗi crash sự kiện log tunnel.
+- Hoàn tất đóng gói Windows (`.exe` NSIS + `.msi`), đồng bộ bộ nhớ chung và phát hành GitHub Release `v0.1.0`.
 
-**File/module cốt lõi:** `crates/{core,system,media,skills,integrations,server}`, `apps/desktop/src-tauri`, `apps/web`, `packages/ui`, `scripts/*.mjs`, `.github/workflows/{ci,release}.yml`, `docs/API.md`.
+**File/module cốt lõi:** `crates/{core,system,media,skills,integrations,server}`, `apps/desktop/src-tauri`, `apps/web`, `packages/ui`, `scripts/*.mjs`, `.github/workflows/{ci,release}.yml`, `docs/API.md`, `docs/SECURITY.md`.
 
 **Tests (máy dev Windows 11, 2026-11-26):** xem khối "Lần chạy test gần nhất" bên dưới và `docs/shared/LAST_TEST_RUN.md`.
 
-**Blocker:** B1 OAuth client_id cho GitHub Device Flow · B2 tài khoản Cloudflare để kiểm chứng tunnel thật · B3 chứng chỉ ký mã (chi tiết: `TASK_BOARD.md`).
+**Blocker:** B1 OAuth client_id cho GitHub Device Flow (đã có `gh` CLI thay thế) · B2 tài khoản Cloudflare để kiểm chứng tunnel thật trên môi trường sản xuất · B3 chứng chỉ ký số Authenticode / Apple notarization (đã phát hành bản unsigned kèm hướng dẫn Gatekeeper/SmartScreen + SHA256SUMS).
 
 ## Việc tiếp theo gợi ý cho Google Antigravity
-1. Kiểm thử thủ công trên máy người dùng: cài installer Windows từ GitHub Release, chạy onboarding, bật LAN trên interface mạng riêng, mở trên điện thoại cùng Wi-Fi bằng QR/pairing, phát + tua + tải video. Ghi kết quả vào `docs/shared/LAST_TEST_RUN.md`.
-2. Kiểm chứng Cloudflare: Quick Tunnel (thử) và Named Tunnel với token + hostname thật; xác nhận SSE fallback polling trên quick tunnel; khuyến nghị bật Cloudflare Access.
-3. Nếu chỉnh skill dựng video gốc tại `E:/_TRAN CAO DAI/SKILL`, thêm thư mục đó làm nguồn Skills trong app (không commit nội dung skill riêng tư vào repo public).
+1. Kiểm thử thực tế trên thiết bị di động/máy tính bảng vật lý cùng mạng Wi-Fi (đăng nhập cả quyền Owner để kiểm chứng quản trị từ xa lẫn quyền Viewer qua QR/pairing) và cập nhật `docs/shared/LAST_TEST_RUN.md`.
+2. Khi chủ sở hữu có tài khoản Cloudflare + domain, kiểm chứng Named Tunnel + Cloudflare Access ngoài thực tế.
+3. Nếu cần mở rộng chỉnh sửa video bằng AI qua skill/agent, bổ sung job kind mới trong `crates/media` + `crates/skills`.
 
 Rules workspace chính thức: `.agents/rules/doto-skill.md`.
 

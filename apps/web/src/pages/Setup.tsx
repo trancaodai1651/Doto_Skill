@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Button, TextInput } from '@doto/ui';
-import { api, errorMessage } from '../api/client';
+import { api, errorMessage, http } from '../api/client';
 import { Toolbar } from '../components/Layout';
 import { useT } from '../i18n';
 import { useSession } from '../state/session';
@@ -15,7 +15,7 @@ export function validateOwnerPassword(pw: string): 'short' | 'weak' | null {
 
 export function SetupPage() {
   const t = useT();
-  const { refresh } = useSession();
+  const { refresh, setMe } = useSession();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -35,7 +35,9 @@ export function SetupPage() {
     setBusy(true);
     setError(null);
     try {
-      await api.auth.setup(username.trim(), password);
+      const authMode = http.isCrossOrigin() ? 'bearer' : undefined;
+      const res = await api.auth.setup(username.trim(), password, authMode);
+      if (res && typeof res === 'object' && 'user' in res) setMe(res);
       await refresh();
     } catch (err) {
       setError(errorMessage(err));

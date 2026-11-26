@@ -96,6 +96,21 @@ describe('http client', () => {
     expect(f.mock.calls.map((c) => String(c[0]))).toEqual(['/api/videos?kind=export&q=a+b', '/api/skills?sourceId=src%2F1', '/api/videos/id%2F1?deleteFile=true']);
     expect(a.server.qrUrl('http://192.168.1.2:4320/?pair=AB')).toBe('/api/server/qr?url=http%3A%2F%2F192.168.1.2%3A4320%2F%3Fpair%3DAB');
   });
+
+  it('uses Bearer header, omits credentials, and builds ticketed media URLs when connected to a remote Desktop Server', async () => {
+    const f = mockFetch(() => jsonResponse(200, { ok: true }));
+    const http = createClient({ baseUrl: 'http://192.168.1.50:4380/', fetch: f });
+    http.setBearerToken('sess-xyz');
+    http.setMediaTicket('tkt-999');
+    const a = createApi(http);
+
+    await a.system.backup();
+    expect(String(f.mock.calls[0]![0])).toBe('http://192.168.1.50:4380/api/system/backup');
+    expect(headersOf(f.mock.calls[0]!)['Authorization']).toBe('Bearer sess-xyz');
+    expect((f.mock.calls[0]![1] as RequestInit).credentials).toBe('omit');
+    expect(a.videos.streamUrl('v1')).toBe('http://192.168.1.50:4380/api/videos/v1/stream?ticket=tkt-999');
+    expect(a.server.qrUrl('http://192.168.1.50:4380')).toContain('ticket=tkt-999');
+  });
 });
 
 describe('parseApiError', () => {

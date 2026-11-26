@@ -1,8 +1,10 @@
 import type {
   AppSettings,
   AuditEvent,
+  BackupEntry,
   DeviceFlowStart,
   DeviceSession,
+  EncoderBenchmark,
   FfmpegStatus,
   GithubStatus,
   HardwareInfo,
@@ -31,6 +33,7 @@ import type {
   VideoKind,
   ProfileId,
 } from './types';
+import { storage } from '../lib/storage';
 
 /** Error thrown for any non-2xx response or network failure. Mirrors the server `ApiError` shape. */
 export class ApiRequestError extends Error {
@@ -58,9 +61,9 @@ const FALLBACK_CODES: Record<number, string> = {
 const FALLBACK_MESSAGES: Record<string, string> = {
   unauthorized: 'Bạn cần đăng nhập lại.',
   forbidden: 'Bạn không có quyền thực hiện thao tác này.',
-  not_found: 'Không tìm thấy tài nguyên (hoặc thao tác chỉ có trên cửa sổ ứng dụng desktop).',
+  not_found: 'Không tìm thấy tài nguyên yêu cầu.',
   rate_limited: 'Bạn thao tác quá nhanh. Vui lòng thử lại sau ít phút.',
-  network: 'Không kết nối được tới máy chủ Doto Skill.',
+  network: 'Không kết nối được tới máy chủ Doto Skill (kiểm tra ứng dụng Desktop đang chạy và không ngủ).',
 };
 
 /** Build an ApiRequestError from an HTTP status and a parsed (or unparsed) body. */
@@ -93,23 +96,68 @@ export interface ClientOptions {
   fetch?: typeof fetch;
 }
 
+export const SERVER_URL_STORAGE_KEY = 'doto.serverUrl';
+export const BEARER_STORAGE_KEY = 'doto.bearerToken';
+
+export function normalizeBaseUrl(raw: string | null | undefined): string {
+  const s = (raw ?? '').trim().replace(/\/+$/, '');
+  if (!s) return '';
+  if (typeof window !== 'undefined') {
+    try {
+      const u = new URL(s);
+      if ((u.protocol === 'http:' || u.protocol === 'https:') && u.origin === window.location.origin) {
+        return '';
+      }
+      if (u.protocol === 'http:' || u.protocol === 'https:') {
+        return u.origin;
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+  return s;
+}
+
 export function createClient(opts: ClientOptions = {}) {
-  const baseUrl = opts.baseUrl ?? '';
+  let baseUrl = normalizeBaseUrl(opts.baseUrl);
   const doFetch = opts.fetch ?? ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
   let csrfToken: string | null = null;
+  let bearerToken: string | null = null;
+  let mediaTicket: string | null = null;
   const unauthorizedListeners = new Set<() => void>();
 
+  function isCrossOrigin(): boolean {
+    if (!baseUrl || typeof window === 'undefined') return Boolean(baseUrl);
+    try {
+      return new URL(baseUrl, window.location.origin).origin !== window.location.origin;
+    } catch {
+      return true;
+    }
+  }
+
+  function mediaUrl(path: string): string {
+    if (!baseUrl && !mediaTicket) return path;
+    const sep = path.includes('?') ? '&' : '?';
+    const withTicket = mediaTicket ? `${path}${sep}ticket=${encodeURIComponent(mediaTicket)}` : path;
+    return `${baseUrl}${withTicket}`;
+  }
+
   async function request<T>(method: Method, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+    const cross = isCrossOrigin();
     const headers: Record<string, string> = { Accept: 'application/json' };
     if (body !== undefined) headers['Content-Type'] = 'application/json';
-    if (method !== 'GET' && csrfToken) headers['x-csrf-token'] = csrfToken;
+    if (bearerToken) {
+      headers['Authorization'] = `Bearer ${bearerToken}`;
+    } else if (method !== 'GET' && csrfToken) {
+      headers['x-csrf-token'] = csrfToken;
+    }
     let res: Response;
     try {
       res = await doFetch(baseUrl + path, {
         method,
         headers,
         body: body === undefined ? undefined : JSON.stringify(body),
-        credentials: 'include',
+        credentials: cross || bearerToken ? 'omit' : 'include',
         signal,
       });
     } catch (e) {
@@ -145,10 +193,24 @@ export function createClient(opts: ClientOptions = {}) {
     put: <T>(path: string, body: unknown) => request<T>('PUT', path, body),
     patch: <T>(path: string, body: unknown) => request<T>('PATCH', path, body),
     del: <T>(path: string) => request<T>('DELETE', path),
+    setBaseUrl(next: string) {
+      baseUrl = normalizeBaseUrl(next);
+    },
+    getBaseUrl: () => baseUrl,
+    isCrossOrigin,
+    mediaUrl,
     setCsrfToken(token: string | null) {
       csrfToken = token;
     },
     getCsrfToken: () => csrfToken,
+    setBearerToken(token: string | null) {
+      bearerToken = token;
+    },
+    getBearerToken: () => bearerToken,
+    setMediaTicket(ticket: string | null) {
+      mediaTicket = ticket;
+    },
+    getMediaTicket: () => mediaTicket,
     onUnauthorized(listener: () => void) {
       unauthorizedListeners.add(listener);
       return () => {
@@ -176,19 +238,21 @@ const enc = encodeURIComponent;
 export function createApi(http: HttpClient) {
   return {
     http,
-    health: () => http.get<{ ok: boolean; version: string; uptimeSeconds: number }>('/api/health'),
+    health: () => http.get<{ ok: boolean; version: string; uptimeSeconds: number; hostname?: string }>('/api/health'),
     auth: {
       me: () => http.get<Me>('/api/auth/me'),
-      setup: (username: string, password: string) => http.post<Me | undefined>('/api/auth/setup', { username, password }),
+      setup: (username: string, password: string, authMode?: 'bearer') =>
+        http.post<Me | undefined>('/api/auth/setup', { username, password, ...(authMode ? { authMode } : {}) }),
       desktop: (token: string) => http.post<Me | undefined>('/api/auth/desktop', { token }),
-      login: (username: string, password: string, deviceName?: string) =>
-        http.post<Me>('/api/auth/login', { username, password, deviceName }),
-      pair: (code: string, deviceName: string) => http.post<Me | undefined>('/api/auth/pair', { code, deviceName }),
+      login: (username: string, password: string, deviceName?: string, authMode?: 'bearer') =>
+        http.post<Me>('/api/auth/login', { username, password, deviceName, ...(authMode ? { authMode } : {}) }),
+      pair: (code: string, deviceName: string, authMode?: 'bearer') =>
+        http.post<Me | undefined>('/api/auth/pair', { code, deviceName, ...(authMode ? { authMode } : {}) }),
+      ticket: () => http.post<{ ticket: string; expiresIn: number }>('/api/auth/ticket'),
       logout: () => http.post<void>('/api/auth/logout'),
     },
     users: {
       list: () => http.get<User[]>('/api/users'),
-      // Body shape not specified in docs/API.md — assumed { username, password, role }.
       create: (username: string, password: string, role: Role) => http.post<User>('/api/users', { username, password, role }),
       remove: (id: string) => http.del<void>(`/api/users/${enc(id)}`),
       setPassword: (id: string, password: string) => http.post<void>(`/api/users/${enc(id)}/password`, { password }),
@@ -204,7 +268,10 @@ export function createApi(http: HttpClient) {
       metrics: () => http.get<Metrics>('/api/system/metrics'),
       ffmpeg: () => http.get<FfmpegStatus>('/api/system/ffmpeg'),
       probeFfmpeg: () => http.post<FfmpegStatus | undefined>('/api/system/ffmpeg/probe'),
-      backup: () => http.post<{ path?: string } | undefined>('/api/system/backup'),
+      benchmarkFfmpeg: () => http.post<{ results: EncoderBenchmark[]; ranAt: string }>('/api/system/ffmpeg/benchmark'),
+      backups: () => http.get<BackupEntry[]>('/api/system/backups'),
+      backup: () => http.post<{ ok?: boolean; file?: string; path?: string } | undefined>('/api/system/backup'),
+      restore: (file: string) => http.post<{ ok: boolean; file: string }>('/api/system/restore', { file, confirm: true }),
       audit: (limit = 200) => http.get<AuditEvent[]>(`/api/audit${qs({ limit })}`),
     },
     settings: {
@@ -255,7 +322,7 @@ export function createApi(http: HttpClient) {
       start: () => http.post<ServerStatus | undefined>('/api/server/start'),
       stop: () => http.post<ServerStatus | undefined>('/api/server/stop'),
       restart: () => http.post<ServerStatus | undefined>('/api/server/restart'),
-      qrUrl: (url: string) => `/api/server/qr${qs({ url })}`,
+      qrUrl: (url: string) => http.mediaUrl(`/api/server/qr${qs({ url })}`),
       firewallGuide: () => http.get<{ os: string; steps: string[]; commands: string[] }>('/api/server/firewall-guide'),
     },
     tunnel: {
@@ -272,9 +339,10 @@ export function createApi(http: HttpClient) {
         http.patch<VideoAsset | undefined>(`/api/videos/${enc(id)}`, patch),
       remove: (id: string, deleteFile = false) => http.del<void>(`/api/videos/${enc(id)}${deleteFile ? '?deleteFile=true' : ''}`),
       scan: () => http.post<unknown>('/api/videos/scan'),
-      thumbnailUrl: (id: string) => `/api/videos/${enc(id)}/thumbnail`,
-      streamUrl: (id: string) => `/api/videos/${enc(id)}/stream`,
-      downloadUrl: (id: string) => `/api/videos/${enc(id)}/download`,
+      thumbnailUrl: (id: string) => http.mediaUrl(`/api/videos/${enc(id)}/thumbnail`),
+      streamUrl: (id: string) => http.mediaUrl(`/api/videos/${enc(id)}/stream`),
+      downloadUrl: (id: string) => http.mediaUrl(`/api/videos/${enc(id)}/download`),
+      shares: (id: string) => http.get<ShareLink[]>(`/api/videos/${enc(id)}/shares`),
       share: (id: string, ttlMinutes: number) => http.post<ShareLink>(`/api/videos/${enc(id)}/share`, { ttlMinutes }),
       revokeShare: (shareId: string) => http.del<void>(`/api/shares/${enc(shareId)}`),
     },
@@ -290,5 +358,13 @@ export function createApi(http: HttpClient) {
 
 export type Api = ReturnType<typeof createApi>;
 
-export const http = createClient();
+const initialBaseUrl =
+  typeof window !== 'undefined'
+    ? normalizeBaseUrl(storage.get(SERVER_URL_STORAGE_KEY) ?? (import.meta.env.VITE_API_BASE_URL as string | undefined))
+    : '';
+export const http = createClient({ baseUrl: initialBaseUrl });
+if (typeof window !== 'undefined' && http.isCrossOrigin()) {
+  const savedBearer = storage.get(BEARER_STORAGE_KEY);
+  if (savedBearer) http.setBearerToken(savedBearer);
+}
 export const api = createApi(http);

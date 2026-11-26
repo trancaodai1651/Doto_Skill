@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Badge, Button, Card, TextInput, StatusPill } from '@doto/ui';
 import { api } from '../api/client';
 import { useEvents } from '../api/events';
-import type { ResourceOverrides, ResourceSettings } from '../api/types';
+import type { EncoderBenchmark, ResourceOverrides, ResourceSettings } from '../api/types';
 import { AsyncView, Code, HostOnly, KeyValue, PageHeader, Sparkline, useNotify } from '../components/common';
 import { LimitsTable, ProfilePicker, useResourceSettings } from '../components/features';
 import { useI18n } from '../i18n';
@@ -153,29 +153,53 @@ function FfmpegCard() {
   const notify = useNotify();
   const ff = useApi('ffmpeg', () => api.system.ffmpeg());
   const [busy, setBusy] = useState(false);
+  const [benchBusy, setBenchBusy] = useState(false);
+  const [bench, setBench] = useState<EncoderBenchmark[] | null>(null);
   return (
     <Card
       title="FFmpeg"
       actions={
         <HostOnly>
-          <Button
-            size="sm"
-            loading={busy}
-            onClick={async () => {
-              setBusy(true);
-              try {
-                const r = await api.system.probeFfmpeg();
-                if (r && typeof r === 'object' && 'found' in r) ff.setData(r);
-                else await ff.reload();
-              } catch (e) {
-                notify.fail(e);
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            {t('perf.reprobe')}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              loading={busy}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  const r = await api.system.probeFfmpeg();
+                  if (r && typeof r === 'object' && 'found' in r) ff.setData(r);
+                  else await ff.reload();
+                } catch (e) {
+                  notify.fail(e);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              {t('perf.reprobe')}
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={benchBusy}
+              disabled={!ff.data?.found}
+              onClick={async () => {
+                setBenchBusy(true);
+                try {
+                  const r = await api.system.benchmarkFfmpeg();
+                  setBench(r.results);
+                  notify.ok(t('perf.benchDone'));
+                } catch (e) {
+                  notify.fail(e);
+                } finally {
+                  setBenchBusy(false);
+                }
+              }}
+            >
+              {t('perf.benchmark')}
+            </Button>
+          </div>
         </HostOnly>
       }
     >
@@ -222,6 +246,31 @@ function FfmpegCard() {
                         <td>
                           {e.working ? <Badge tone="success">✓</Badge> : e.error ? <span className="text-xs text-danger">{e.error}</span> : '—'}
                         </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {bench && bench.length > 0 && (
+              <div className="overflow-x-auto">
+                <p className="mb-1 font-semibold">{t('perf.benchTitle')}</p>
+                <table className="data" data-testid="benchmark-table">
+                  <thead>
+                    <tr>
+                      <th>Encoder</th>
+                      <th>{t('perf.encKind')}</th>
+                      <th>FPS (720p)</th>
+                      <th>{t('perf.benchTime')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bench.map((b) => (
+                      <tr key={b.name}>
+                        <td className="font-mono text-xs">{b.name}</td>
+                        <td>{b.kind === 'hardware' ? t('perf.hardware') : t('perf.software')}</td>
+                        <td className="font-semibold">{b.fps.toFixed(1)} fps</td>
+                        <td>{b.elapsedMs} ms</td>
                       </tr>
                     ))}
                   </tbody>

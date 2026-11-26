@@ -149,28 +149,80 @@ async fn auth_csrf_rbac_and_listener_isolation() {
     d.req(Method::PUT, "/api/server/config", Some(json!({ "mode": "localhost", "port": port }))).await;
     assert_eq!(d.req(Method::POST, "/api/server/start", None).await.0, StatusCode::OK);
 
-    // owner đăng nhập từ trình duyệt qua listener public: KHÔNG có hostControl, route [H] không tồn tại
+    // owner đăng nhập từ trình duyệt qua listener public: có đầy đủ quyền Owner như bản App,
+    // nhưng /api/auth/desktop không tồn tại trên Public và /api/auth/setup bị khoá sau khi đã đặt mật khẩu
     let mut remote = Client::new(&pub_base);
     let (s, me, _) = remote.req(Method::POST, "/api/auth/login", Some(json!({ "username": "admin", "password": "Strong-pass-2026" }))).await;
     assert_eq!(s, StatusCode::OK, "{me}");
     assert_eq!(me["hostControl"], false);
-    for (m, p) in [
-        (Method::POST, "/api/server/stop"),
-        (Method::POST, "/api/tools/claude/install"),
-        (Method::POST, "/api/skill-sources/folder"),
-        (Method::PUT, "/api/settings"),
-        (Method::POST, "/api/auth/desktop"),
-        (Method::POST, "/api/tunnel/start"),
-    ] {
-        let (s, _, _) = remote.req(m.clone(), p, Some(json!({}))).await;
-        assert!(s == StatusCode::NOT_FOUND || s == StatusCode::METHOD_NOT_ALLOWED, "{m} {p} → {s}");
-    }
+    assert_eq!(me["user"]["role"], "owner");
+    assert_eq!(remote.req(Method::POST, "/api/auth/desktop", Some(json!({ "token": "x" }))).await.0, StatusCode::NOT_FOUND);
+    assert_eq!(
+        remote.req(Method::POST, "/api/auth/setup", Some(json!({ "username": "admin2", "password": "Strong-pass-2026" }))).await.0,
+        StatusCode::CONFLICT
+    );
+
+    // Owner trên bản Web dùng được đầy đủ chức năng trên phần cứng máy chủ: backup/list/restore, probe, onboarding, skill folder...
+    let (s, bak, _) = remote.req(Method::POST, "/api/system/backup", None).await;
+    assert_eq!(s, StatusCode::OK, "{bak}");
+    let bak_file = bak["file"].as_str().unwrap().to_string();
+    let (s, baks, _) = remote.req(Method::GET, "/api/system/backups", None).await;
+    assert_eq!(s, StatusCode::OK);
+    assert!(baks.as_array().unwrap().iter().any(|x| x["file"] == bak_file));
+    // chặn path traversal khi restore
+    assert_eq!(remote.req(Method::POST, "/api/system/restore", Some(json!({ "file": "../doto.sqlite", "confirm": true }))).await.0, StatusCode::BAD_REQUEST);
+    assert_eq!(remote.req(Method::POST, "/api/system/restore", Some(json!({ "file": bak_file, "confirm": true }))).await.0, StatusCode::OK);
+    assert_eq!(remote.req(Method::POST, "/api/onboarding/complete", None).await.0, StatusCode::OK);
+    assert_eq!(remote.req(Method::GET, "/api/tools/claude/diagnostics", None).await.0, StatusCode::OK);
+
+    // chặn đặt ffmpegPath trỏ tới tệp không phải FFmpeg (ngăn thực thi binary tuỳ ý)
+    let fake_bin = tmp.path().join(if cfg!(windows) { "cmd.exe" } else { "sh" });
+    std::fs::write(&fake_bin, b"not ffmpeg").unwrap();
+    let (_, mut bad_settings, _) = remote.req(Method::GET, "/api/settings", None).await;
+    bad_settings["ffmpegPath"] = json!(fake_bin.to_string_lossy());
+    assert_eq!(remote.req(Method::PUT, "/api/settings", Some(bad_settings)).await.0, StatusCode::BAD_REQUEST);
+
+    // Cross-origin: chặn cookie CSRF, nhưng cho phép bản Web độc lập kết nối qua Bearer token + media ticket
+    let (s, _, _) = remote.req_h(Method::POST, "/api/system/backup", None, &[("origin", "https://evil.example")]).await;
+    assert_eq!(s, StatusCode::FORBIDDEN);
+    let preflight =
+        reqwest::Client::new().request(Method::OPTIONS, format!("{pub_base}/api/auth/login")).header("Origin", "http://localhost:5173").send().await.unwrap();
+    assert_eq!(preflight.status(), StatusCode::NO_CONTENT);
+    assert_eq!(preflight.headers().get("access-control-allow-origin").unwrap(), "http://localhost:5173");
+    assert!(preflight.headers().get("access-control-allow-credentials").is_none(), "không bao giờ bật credentials cho cross-origin");
+
+    let bearer_login = reqwest::Client::new()
+        .post(format!("{pub_base}/api/auth/login"))
+        .header("Origin", "http://localhost:5173")
+        .json(&json!({ "username": "admin", "password": "Strong-pass-2026", "authMode": "bearer" }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(bearer_login.status(), StatusCode::OK);
+    let bearer_body: Value = bearer_login.json().await.unwrap();
+    let bearer_tok = bearer_body["sessionToken"].as_str().unwrap().to_string();
+    let ticket_res = reqwest::Client::new()
+        .post(format!("{pub_base}/api/auth/ticket"))
+        .header("Origin", "http://localhost:5173")
+        .header("Authorization", format!("Bearer {bearer_tok}"))
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(ticket_res.status(), StatusCode::OK);
+    let ticket = ticket_res.json::<Value>().await.unwrap()["ticket"].as_str().unwrap().to_string();
+    // ticket chỉ được phép trên GET media/QR/SSE, không được phép gọi API quản trị
+    let qr_ok = reqwest::get(format!("{pub_base}/api/server/qr?url=http%3A%2F%2F127.0.0.1%3A4380&ticket={ticket}")).await.unwrap();
+    assert_eq!(qr_ok.status(), StatusCode::OK);
+    let audit_denied = reqwest::get(format!("{pub_base}/api/audit?ticket={ticket}")).await.unwrap();
+    assert_eq!(audit_denied.status(), StatusCode::UNAUTHORIZED);
+
     // cookie của listener Control không có hiệu lực trên Public
     let mut stolen = Client::new(&pub_base);
     stolen.cookie = d.cookie.clone();
     assert_eq!(stolen.req(Method::GET, "/api/audit", None).await.0, StatusCode::UNAUTHORIZED);
 
-    // tạo viewer, viewer bị cấm route admin
+    // tạo viewer, viewer bị cấm tuyệt đối mọi route admin và điều khiển máy chủ
     let (s, _, _) = remote.req(Method::POST, "/api/users", Some(json!({ "username": "viewer1", "password": "Viewer-pass-99", "role": "viewer" }))).await;
     assert_eq!(s, StatusCode::OK);
     let mut viewer = Client::new(&pub_base);
@@ -179,6 +231,18 @@ async fn auth_csrf_rbac_and_listener_isolation() {
         ["/api/audit", "/api/skills", "/api/tools", "/api/devices", "/api/users", "/api/system/hardware", "/api/jobs", "/api/settings", "/api/tunnel/status"]
     {
         assert_eq!(viewer.req(Method::GET, p, None).await.0, StatusCode::FORBIDDEN, "viewer {p}");
+    }
+    for (m, p, body) in [
+        (Method::POST, "/api/server/stop", json!({})),
+        (Method::POST, "/api/tools/claude/install", json!({ "methodId": "npm", "confirm": true })),
+        (Method::POST, "/api/skill-sources/folder", json!({ "path": "/tmp" })),
+        (Method::PUT, "/api/settings", json!({})),
+        (Method::POST, "/api/system/backup", json!({})),
+        (Method::POST, "/api/system/restore", json!({ "file": "a.sqlite", "confirm": true })),
+        (Method::POST, "/api/tunnel/start", json!({})),
+        (Method::POST, "/api/videos/scan", json!({})),
+    ] {
+        assert_eq!(viewer.req(m.clone(), p, Some(body)).await.0, StatusCode::FORBIDDEN, "viewer {m} {p}");
     }
     assert_eq!(viewer.req(Method::POST, "/api/jobs/render", Some(json!({ "title": "x", "segments": [] }))).await.0, StatusCode::FORBIDDEN);
     let (s, v, _) = viewer.req(Method::GET, "/api/videos", None).await;

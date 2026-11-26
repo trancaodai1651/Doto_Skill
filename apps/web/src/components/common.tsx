@@ -1,9 +1,9 @@
-import { useCallback } from 'react';
-import type { ReactNode } from 'react';
-import { Button, EmptyState, Spinner, useToast } from '@doto/ui';
-import { errorMessage } from '../api/client';
+import { useCallback, useState } from 'react';
+import type { FormEvent, ReactNode } from 'react';
+import { Button, EmptyState, Spinner, TextInput, useToast } from '@doto/ui';
+import { api, createApi, createClient, errorMessage, normalizeBaseUrl } from '../api/client';
 import { useT } from '../i18n';
-import { useCaps } from '../state/session';
+import { useCaps, useSession } from '../state/session';
 import type { ApiState } from '../lib/useApi';
 
 export function PageHeader({ title, description, actions }: { title: ReactNode; description?: ReactNode; actions?: ReactNode }) {
@@ -66,15 +66,109 @@ export function AsyncView<T>({
   );
 }
 
-/** Shows children only on the desktop window (hostControl); otherwise an explanation. */
+/** Hiển thị thao tác quản trị cho Chủ sở hữu trên cả bản Desktop App và bản Web (sử dụng phần cứng máy chủ). */
 export function HostOnly({ children, compact }: { children: ReactNode; compact?: boolean }) {
-  const { hostControl } = useCaps();
+  const { isOwner } = useCaps();
   const t = useT();
-  if (hostControl) return <>{children}</>;
+  if (isOwner) return <>{children}</>;
   return (
     <span className={compact ? 'text-xs text-muted' : 'inline-block rounded-md bg-surface-2 px-2 py-1 text-xs text-muted'} data-testid="host-only-note">
       🔒 {t('host.only')}
     </span>
+  );
+}
+
+/** Cấu hình địa chỉ máy chủ của bản App để bản Web kết nối và sử dụng phần cứng máy chủ. */
+export function ServerConnectionBox({ defaultExpanded = false, onConnected }: { defaultExpanded?: boolean; onConnected?: () => void }) {
+  const t = useT();
+  const { me, serverUrl, setServerUrl } = useSession();
+  const [open, setOpen] = useState(defaultExpanded);
+  const [input, setInput] = useState(serverUrl);
+  const [err, setErr] = useState<string | undefined>();
+  const [testing, setTesting] = useState(false);
+
+  const activeOrigin = serverUrl || (typeof window !== 'undefined' ? window.location.origin : '');
+
+  async function applyUrl(e: FormEvent) {
+    e.preventDefault();
+    const raw = input.trim();
+    if (raw && !/^https?:\/\/[^\s/]+/i.test(raw)) {
+      setErr(t('conn.badUrl'));
+      return;
+    }
+    setErr(undefined);
+    setTesting(true);
+    try {
+      const normalized = normalizeBaseUrl(raw);
+      if (normalized) {
+        const probe = createApi(createClient({ baseUrl: normalized }));
+        await probe.health();
+      } else {
+        await api.health();
+      }
+      await setServerUrl(normalized);
+      setOpen(false);
+      onConnected?.();
+    } catch (ex) {
+      setErr(errorMessage(ex));
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-line bg-surface-2/60 p-3 text-sm" data-testid="server-connection-box">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0">
+          <span className="font-semibold">{t('conn.label')}: </span>
+          <code className="rounded bg-surface px-1.5 py-0.5 font-mono text-xs break-all">{activeOrigin}</code>
+          {me?.hostname && <span className="ml-2 text-xs text-muted">({me.hostname})</span>}
+        </div>
+        {!defaultExpanded && (
+          <Button size="sm" variant="ghost" onClick={() => setOpen((o) => !o)}>
+            {open ? t('common.close') : t('conn.change')}
+          </Button>
+        )}
+      </div>
+      {(open || defaultExpanded) && (
+        <form onSubmit={applyUrl} className="mt-3 flex flex-col gap-2">
+          <TextInput
+            label={t('conn.urlLabel')}
+            placeholder="http://192.168.1.10:4380"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            error={err}
+            hint={t('conn.urlHint')}
+            inputMode="url"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+          />
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" size="sm" variant="primary" loading={testing}>
+              {t('conn.connect')}
+            </Button>
+            {serverUrl && (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                loading={testing}
+                onClick={async () => {
+                  setInput('');
+                  setErr(undefined);
+                  await setServerUrl('');
+                  setOpen(false);
+                  onConnected?.();
+                }}
+              >
+                {t('conn.useSameOrigin')}
+              </Button>
+            )}
+          </div>
+        </form>
+      )}
+    </div>
   );
 }
 

@@ -79,6 +79,29 @@ export function authTone(s: ToolStatus['authStatus']) {
 // ---------------------------------------------------------------------------
 // Skill sources
 // ---------------------------------------------------------------------------
+export function HostDiskHints({ onSelect }: { onSelect: (mountPoint: string) => void }) {
+  const t = useT();
+  const hw = useApi('hw-disks', () => api.system.hardware());
+  const disks = hw.data?.disks ?? [];
+  if (disks.length === 0) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted">
+      <span>{t('folders.hostDisks')}:</span>
+      {disks.map((d) => (
+        <button
+          key={d.mountPoint}
+          type="button"
+          onClick={() => onSelect(d.mountPoint)}
+          className="rounded border border-line bg-surface-2 px-2 py-0.5 font-mono text-fg hover:border-primary"
+          title={`${d.mountPoint} · ${formatBytes(d.availableBytes)}`}
+        >
+          {d.mountPoint} ({formatBytes(d.availableBytes)})
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function AddFolderSourceForm({ onAdded }: { onAdded?: (s: SkillSource) => void }) {
   const t = useT();
   const notify = useNotify();
@@ -109,6 +132,7 @@ export function AddFolderSourceForm({ onAdded }: { onAdded?: (s: SkillSource) =>
           autoCorrect="off"
           spellCheck={false}
         />
+        <HostDiskHints onSelect={(m) => setPath((cur) => cur || m)} />
         <Checkbox label={t('sources.watch')} checked={watch} onChange={(e) => setWatch(e.target.checked)} />
         <div>
           <Button type="submit" variant="primary">

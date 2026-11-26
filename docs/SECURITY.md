@@ -2,9 +2,9 @@
 
 | Mối đe doạ | Biện pháp | Kiểm chứng |
 | --- | --- | --- |
-| Trình duyệt từ xa điều khiển máy host (chạy CLI, đọc ổ đĩa) | Route `[H]` chỉ đăng ký trên listener Control (127.0.0.1); phiên `hostControl` chỉ từ token desktop một lần; listener Control từ chối peer không phải loopback | `api_security.rs::auth_csrf_rbac_and_listener_isolation` |
-| Đánh cắp cookie giữa 2 listener cùng host | Tên cookie khác nhau; `hostControl` bị gỡ nếu không phải listener Control | cùng test (cookie Control → 401 trên Public) |
-| CSRF | SameSite=Strict, header `x-csrf-token` theo phiên, kiểm tra Origin = Host | test CSRF/Origin → 403 |
+| Thực thi lệnh shell / binary tuỳ ý từ trình duyệt | Không có API chạy shell hay đọc file tuỳ ý; CLI chỉ chạy theo `methodId` allowlist biên dịch cứng có xác nhận; `ffmpegPath`/`ffprobePath` bắt buộc tên đúng + xác minh `-version` thật trước khi lưu; Viewer bị chặn `403` khỏi mọi route quản trị | `api_security.rs::auth_csrf_rbac_and_listener_isolation` |
+| Chiếm quyền thiết lập lần đầu qua mạng | `/api/auth/desktop` chỉ có trên listener Control (loopback); `/api/auth/setup` chỉ cho phép trực tiếp từ loopback khi chưa có mật khẩu Owner, sau đó khoá vĩnh viễn (`409`); LAN/Tunnel không thể bật khi chưa đặt mật khẩu Owner | cùng test |
+| Đánh cắp cookie / CSRF chéo miền | Same-origin dùng cookie tên riêng (`doto_ctl`/`doto_session`), `SameSite=Strict`, `x-csrf-token` và kiểm tra `Origin == Host`. Cross-origin (bản Web độc lập kết nối tới server bản App) dùng `Authorization: Bearer` **không** bật `Access-Control-Allow-Credentials`, kèm vé ngắn hạn `POST /api/auth/ticket` chỉ cho GET media/QR/SSE | test CSRF/Origin → 403 + test CORS Bearer/ticket |
 | Brute force | Rate limit 10/5 phút/IP cho login, pair, desktop; Argon2id; cân bằng thời gian khi user không tồn tại | test 429 |
 | IDOR / dò tài nguyên | UUID ngẫu nhiên; kiểm tra quyền từng video; không quyền → 404 | test viewer ↔ video nguồn private |
 | Path traversal | API chỉ nhận id; đường dẫn đĩa không bao giờ trả về; scanner/skill/tar chặn `..`, symlink, absolute | test traversal + unit test tar/scanner |

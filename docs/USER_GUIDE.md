@@ -4,11 +4,13 @@
 1. Mở ứng dụng → tạo **tài khoản Owner** (tên đăng nhập + mật khẩu ≥ 10 ký tự có chữ và số). Mật khẩu dùng khi đăng nhập từ thiết bị khác.
 2. Trình hướng dẫn 8 bước: điều khoản & thư mục dữ liệu → kiểm tra phần cứng → chọn chế độ tài nguyên (mặc định **Cân bằng**) → thư mục video nguồn/xuất (có thể bỏ qua) → Skills (**0 skill**, không cài sẵn) → công cụ AI CLI (tuỳ chọn, mỗi lần cài đều hiện lệnh + nguồn để xác nhận) → máy chủ web (Off/Localhost/LAN) → hoàn tất.
 
-## 2. Chia sẻ video cho thiết bị khác cùng mạng
-1. **Máy chủ web & mạng** → Chế độ **Mạng LAN** → chọn **interface mạng riêng** (Wi-Fi/Ethernet nội bộ hoặc VPN như Tailscale). Nếu máy có IP public, đừng chọn "Tất cả (0.0.0.0)".
-2. Lưu → xác nhận rủi ro → **Khởi động**. Windows/macOS có thể hỏi quyền tường lửa: chỉ cho phép mạng **Private**.
-3. **Thiết bị** → tạo **mã ghép nối** (Viewer, hết hạn sau 15 phút) → quét QR bằng điện thoại, hoặc tạo tài khoản Viewer.
-4. Trong **Video**: chọn đoạn nguồn → tạo job render → khi xong đặt hiển thị "Người xem thấy được". Viewer chỉ thấy các video này.
+## 2. Dùng bản Web với đầy đủ tính năng như bản App & chia sẻ cho thiết bị khác
+- **Chủ sở hữu (Owner) trên bản Web:** khi đăng nhập tài khoản Owner từ trình duyệt bất kỳ (PC khác, laptop, máy tính bảng, điện thoại qua LAN hoặc Cloudflare Tunnel), bạn có **đầy đủ 100% tính năng như trên cửa sổ bản App** — mọi tác vụ dò phần cứng, benchmark/render GPU FFmpeg, quản lý Skills, cài AI CLI đều chạy trực tiếp trên phần cứng máy chủ của bản App. Nếu dùng bản Web độc lập, bạn có thể nhập địa chỉ máy chủ bản App ngay tại ô **Máy chủ bản App** ở màn hình Đăng nhập hoặc Cài đặt.
+- **Chia sẻ cho Người xem (Viewer):**
+  1. **Máy chủ web & mạng** → Chế độ **Mạng LAN** → chọn **interface mạng riêng** (Wi-Fi/Ethernet nội bộ hoặc VPN như Tailscale). Nếu máy có IP public, đừng chọn "Tất cả (0.0.0.0)".
+  2. Lưu → xác nhận rủi ro → **Khởi động**. Windows/macOS có thể hỏi quyền tường lửa: chỉ cho phép mạng **Private**.
+  3. **Thiết bị** → tạo **mã ghép nối** (Viewer, hết hạn sau 15 phút) → quét QR bằng điện thoại, hoặc tạo tài khoản Viewer.
+  4. Trong **Video**: chọn đoạn nguồn → tạo job render → khi xong đặt hiển thị "Người xem thấy được". Viewer chỉ thấy các video này và không vào được bất kỳ trang quản trị nào.
 
 ## 3. Truy cập qua Internet (Cloudflare Tunnel)
 - Cài `cloudflared` trong **Công cụ AI**.
@@ -27,8 +29,8 @@
 - Ghi đè thủ công `maxJobs`, `maxCpuThreads`, `maxRamMb`, `maxGpuJobs` (kẹp theo phần cứng). Áp dụng ngay.
 - **Kiểm tra encoder** encode thử 1 giây cho từng encoder phần cứng; "Tự động" dùng GPU tốt nhất đã kiểm chứng, lỗi thì tự quay về libx264.
 
-## 6. Sao lưu
-**Cài đặt › Sao lưu** tạo bản sao SQLite trong `<thư mục dữ liệu>/backups/`. Token GitHub/tunnel nằm trong Keychain/Credential Manager, không nằm trong bản sao lưu.
+## 6. Sao lưu & khôi phục
+**Cài đặt › Sao lưu & khôi phục cơ sở dữ liệu** tạo bản sao SQLite trực tuyến trong `<thư mục dữ liệu>/backups/` và cho phép khôi phục lại bất kỳ bản sao nào sau khi xác nhận. Token GitHub/tunnel nằm trong Keychain/Credential Manager, không nằm trong bản sao lưu.
 
 ## 7. Xử lý sự cố
 | Triệu chứng | Cách xử lý |

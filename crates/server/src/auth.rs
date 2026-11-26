@@ -245,18 +245,76 @@ async fn load_session(st: &AppState, token: &str) -> anyhow::Result<Option<Auth>
         .await
 }
 
-/// Lấy phiên (nếu có) từ cookie của listener hoặc Bearer token.
+async fn load_session_by_id(st: &AppState, session_id: &str) -> anyhow::Result<Option<Auth>> {
+    let sid = session_id.to_string();
+    st.db
+        .call(move |c| {
+            let row = c
+                .query_row(
+                    "SELECT s.id, s.csrf_token, s.host_control, s.expires_at, u.id, u.username, u.role
+                     FROM sessions s JOIN users u ON u.id=s.user_id
+                     WHERE s.id=?1 AND s.revoked=0 AND u.disabled=0",
+                    [sid],
+                    |r| {
+                        Ok((
+                            r.get::<_, String>(0)?,
+                            r.get::<_, String>(1)?,
+                            r.get::<_, i64>(2)?,
+                            r.get::<_, String>(3)?,
+                            r.get::<_, String>(4)?,
+                            r.get::<_, String>(5)?,
+                            r.get::<_, String>(6)?,
+                        ))
+                    },
+                )
+                .optional()?;
+            let Some((sid, csrf, hc, exp, uid, uname, role)) = row else { return Ok(None) };
+            let now = chrono::Utc::now();
+            let exp = chrono::DateTime::parse_from_rfc3339(&exp).map(|d| d.with_timezone(&chrono::Utc)).unwrap_or(now);
+            if exp <= now {
+                return Ok(None);
+            }
+            Ok(Some(Auth { user_id: uid, username: uname, role, host_control: hc != 0, session_id: sid, csrf, ip: None }))
+        })
+        .await
+}
+
+fn ticket_allowed_path(path: &str) -> bool {
+    matches!(path, "/api/events" | "/api/server/qr")
+        || (path.starts_with("/api/videos/") && (path.ends_with("/stream") || path.ends_with("/download") || path.ends_with("/thumbnail")))
+}
+
+fn query_ticket(uri: &axum::http::Uri) -> Option<String> {
+    let q = uri.query()?;
+    for pair in q.split('&') {
+        if let Some((k, v)) = pair.split_once('=') {
+            if k == "ticket" && !v.is_empty() {
+                return Some(v.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// Lấy phiên (nếu có) từ Bearer token, cookie của listener, hoặc media ticket ngắn hạn (chỉ GET media/SSE).
 pub async fn authenticate(st: &AppState, parts: &Parts) -> ApiResult<Option<Auth>> {
     let kind = parts.extensions.get::<ListenerKind>().copied().unwrap_or(ListenerKind::Public);
     let peer = parts.extensions.get::<ConnectInfo<SocketAddr>>().map(|c| c.0);
     let bearer = parts.headers.get("authorization").and_then(|v| v.to_str().ok()).and_then(|v| v.strip_prefix("Bearer ")).map(|s| s.trim().to_string());
-    let (token, via_cookie) = match (bearer, read_cookie(&parts.headers, kind.cookie_name())) {
-        (Some(b), _) => (b, false),
-        (None, Some(c)) => (c, true),
-        (None, None) => return Ok(None),
+    let mut auth_opt = match (bearer, read_cookie(&parts.headers, kind.cookie_name())) {
+        (Some(b), _) => load_session(st, &b).await?.map(|a| (a, false)),
+        (None, Some(c)) => load_session(st, &c).await?.map(|a| (a, true)),
+        (None, None) => None,
     };
-    let Some(mut auth) = load_session(st, &token).await? else { return Ok(None) };
-    // hostControl chỉ có hiệu lực trên listener Control (phòng thủ nhiều lớp)
+    if auth_opt.is_none() && matches!(parts.method, Method::GET | Method::HEAD) && ticket_allowed_path(parts.uri.path()) {
+        if let Some(raw_ticket) = query_ticket(&parts.uri) {
+            if let Some(sid) = st.verify_media_ticket(&raw_ticket) {
+                auth_opt = load_session_by_id(st, &sid).await?.map(|a| (a, false));
+            }
+        }
+    }
+    let Some((mut auth, via_cookie)) = auth_opt else { return Ok(None) };
+    // hostControl đánh dấu phiên cửa sổ desktop nội bộ (dùng để cảnh báo khi dừng web server)
     if kind != ListenerKind::Control {
         auth.host_control = false;
     }

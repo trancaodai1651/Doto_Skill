@@ -8,24 +8,24 @@
 ## 2. Kiến trúc hiện tại (v0.1.0)
 ```
 apps/desktop (Tauri v2, tray, autostart) ──in-process──► crates/server (Axum)
-                                                         ├─ listener Control 127.0.0.1:<ngẫu nhiên>  → cửa sổ desktop, route [H]
-                                                         └─ listener Public  Off | 127.0.0.1 | LAN(IP/0.0.0.0):4380 → trình duyệt, cloudflared
-crates/server ─► crates/core (SQLite WAL + migrations, settings, audit, jobs, EventBus, OS vault)
+                                                         ├─ listener Control 127.0.0.1:<ngẫu nhiên>  → cửa sổ desktop
+                                                         └─ listener Public  Off | 127.0.0.1 | LAN(IP/0.0.0.0):4380 → bản Web, cloudflared
+crates/server ─► crates/core (SQLite WAL + migrations, backup/restore, settings, audit, jobs, EventBus, OS vault)
               ─► crates/system (HardwareProbe, ResourceManager + admission)
-              ─► crates/media (FFmpeg discover/verify, encoder probe, library, render queue)
+              ─► crates/media (FFmpeg discover/verify, encoder probe & 720p benchmark, library, render queue)
               ─► crates/skills (scanner, GitHub client, SkillService, provider mapping)
               ─► crates/integrations (CliProvider ×4, ToolManager, cloudflared installer, TunnelManager)
-apps/web + packages/ui (React 19, TS strict, Vite, Tailwind 4) → build ra apps/web/dist, server phục vụ tĩnh + SPA fallback
+apps/web + packages/ui (React 19, TS strict, Vite, Tailwind 4) → build ra apps/web/dist, phục vụ tĩnh hoặc chạy độc lập kết nối tới URL máy chủ bản App
 ```
-- **Bảo mật listener:** route điều khiển máy (cài CLI, đổi thư mục root, thêm nguồn skill, start/stop server/tunnel, đọc filesystem) chỉ đăng ký trên listener Control; phiên `hostControl` chỉ tạo được bằng token một lần do app desktop sinh (đưa qua URL fragment). Cookie tách tên theo listener (`doto_ctl` / `doto_session`).
-- **Auth:** Argon2id, cookie HttpOnly + SameSite=Strict (+Secure khi qua HTTPS/cloudflared), CSRF header `x-csrf-token`, kiểm tra Origin, rate limit 10/5 phút cho login/pair, pairing code 8 ký tự hết hạn (5–1440 phút) dùng một lần, revoke phiên, IP allowlist (CIDR), audit log (đã lọc bí mật). Owner cục bộ tự tạo lần đầu với mật khẩu `!` (không đăng nhập từ xa được) → cửa sổ desktop bắt buộc đặt tài khoản/mật khẩu Owner; LAN/Tunnel bị chặn tới khi có mật khẩu.
-- **RBAC:** Owner (quản trị), Viewer (chỉ xem/tải export có `visibility=viewers`). Không có quyền → 404 (chống IDOR). API không bao giờ trả đường dẫn đĩa.
-- **Video:** quét thư mục được cấp quyền (không theo symlink), ffprobe, thumbnail; render trim/ghép nhiều đoạn → MP4 H.264/AAC, `-progress pipe:1` cho tiến độ/ETA thật, ghi `.part.mp4` rồi rename atomic, hủy/thử lại, fallback libx264 khi encoder GPU lỗi, khôi phục job khi app khởi động lại. Stream có HTTP Range (206/416), download `Content-Disposition` UTF-8, share link có hạn + revoke, giới hạn số luồng theo profile + băng thông tuỳ chọn.
-- **Profile:** Eco/Balanced/Max thay đổi `max_jobs`, thread FFmpeg, ngưỡng CPU/RAM nhận job, số phiên GPU, chu kỳ đo; override thủ công kẹp theo phần cứng; áp dụng ngay không restart.
-- **Skills:** 0 nguồn/0 skill ban đầu. Nguồn thư mục (watcher debounce 1.5s) và GitHub (resolve ref→SHA, tải tarball read-only, giải nén an toàn: chặn traversal/symlink/hardlink, giới hạn 200 MB nén/500 MB giải nén/50k entry; check-update hiển thị diff file trước khi apply; pin commit). Cài sang provider = **sao chép** kèm marker `.doto-skill.json`, không ghi đè thư mục người dùng, skill có script cần xác nhận riêng.
+- **Bản App & Bản Web đồng nhất 100% tính năng (ADR-013):** Owner đã xác thực trên bản Web (cùng miền hoặc kết nối từ xa tới địa chỉ máy chủ bản App) có đầy đủ mọi tính năng quản trị như trên cửa sổ Desktop, sử dụng trực tiếp phần cứng CPU/RAM/GPU của máy chủ bản App thông qua API allowlist an toàn. Browser không bao giờ gửi lệnh shell tuỳ ý hay đường dẫn thực thi giả (`ffmpegPath`/`ffprobePath` bắt buộc xác minh `-version` thật trước khi lưu). Chỉ `/api/auth/desktop` dành riêng cho token một lần của cửa sổ Tauri, và `/api/auth/setup` chỉ cho phép từ loopback khi chưa đặt mật khẩu Owner.
+- **Auth & Kết nối chéo miền:** Argon2id, cùng miền dùng cookie HttpOnly + SameSite=Strict (+Secure khi HTTPS) + `x-csrf-token` + kiểm tra `Origin == Host`. Bản Web độc lập kết nối chéo miền tới server bản App dùng `Authorization: Bearer <sessionToken>` (CORS **không** bật `Access-Control-Allow-Credentials` → miễn nhiễm CSRF chéo miền) kèm vé ngắn hạn `POST /api/auth/ticket` (10 phút) chỉ áp dụng cho GET media/QR/SSE. Rate limit 10/5 phút cho login/pair, pairing code 8 ký tự hết hạn (5–1440 phút) dùng một lần, revoke phiên, IP allowlist (CIDR), audit log (đã lọc bí mật).
+- **RBAC:** Owner (quản trị đầy đủ trên cả App & Web), Viewer (chỉ xem/tải export có `visibility=viewers`, bị cấm `403`/`404` khỏi toàn bộ route quản trị). API không bao giờ trả đường dẫn đĩa thật cho Viewer.
+- **Video:** quét thư mục được cấp quyền (không theo symlink), ffprobe, thumbnail; render trim/ghép nhiều đoạn → MP4 H.264/AAC, `-progress pipe:1` cho tiến độ/ETA thật, ghi `.part.mp4` rồi rename atomic, hủy/thử lại, fallback libx264 khi encoder GPU lỗi, khôi phục job khi app khởi động lại. Stream có HTTP Range (206/416), download `Content-Disposition` UTF-8, tạo/liệt kê/thu hồi share link có hạn, giới hạn số luồng theo profile + băng thông tuỳ chọn.
+- **Profile & Benchmark:** Eco/Balanced/Max thay đổi `max_jobs`, thread FFmpeg, ngưỡng CPU/RAM nhận job, số phiên GPU, chu kỳ đo; override thủ công kẹp theo phần cứng; áp dụng ngay không restart; có benchmark encoder 720p thực tế (`POST /api/system/ffmpeg/benchmark`).
+- **Skills:** 0 nguồn/0 skill ban đầu. Nguồn thư mục (watcher debounce 1.5s, gợi ý ổ đĩa máy chủ) và GitHub (resolve ref→SHA, tải tarball read-only, giải nén an toàn: chặn traversal/symlink/hardlink, giới hạn 200 MB nén/500 MB giải nén/50k entry; check-update hiển thị diff file trước khi apply; pin commit). Cài sang provider = **sao chép** kèm marker `.doto-skill.json`, không ghi đè thư mục người dùng, skill có script cần xác nhận riêng.
 
 ## 3. Quyết định đã chốt
-Xem `docs/shared/DECISIONS.md` (ADR-001…ADR-012).
+Xem `docs/shared/DECISIONS.md` (ADR-001…ADR-013).
 
 ## 4. Đường dẫn provider (tài liệu chính thức, kiểm tra 2026-11-26)
 | Provider | Skills cấp user | Kiểm tra đăng nhập |

@@ -18,9 +18,19 @@ export const vi = {
   'common.search': 'Tìm kiếm',
   'common.viewAll': 'Xem tất cả',
 
-  'host.only': 'Chỉ thực hiện được trên cửa sổ ứng dụng desktop',
+  'host.only': 'Chỉ dành cho Chủ sở hữu',
   'host.remoteBanner':
-    'Bạn đang truy cập từ xa. Các thao tác trên máy chủ (cài phần mềm, đổi thư mục, cấu hình mạng, tunnel) chỉ thực hiện được trên cửa sổ ứng dụng desktop.',
+    'Bản Web đang kết nối và sử dụng trực tiếp phần cứng máy chủ của ứng dụng ({host}) — đầy đủ chức năng như bản App.',
+
+  'conn.title': 'Kết nối máy chủ bản App',
+  'conn.desc': 'Bản Web thực thi toàn bộ nhận diện phần cứng, render FFmpeg/GPU, quản lý Skills và CLI thông qua máy chủ của bản App.',
+  'conn.label': 'Máy chủ bản App',
+  'conn.change': 'Đổi máy chủ',
+  'conn.urlLabel': 'Địa chỉ máy chủ Doto Skill (bản App)',
+  'conn.urlHint': 'Ví dụ http://127.0.0.1:4380, http://192.168.1.10:4380 hoặc URL Cloudflare Tunnel. Để trống nếu mở trực tiếp từ máy chủ.',
+  'conn.badUrl': 'Nhập URL bắt đầu bằng http:// hoặc https://',
+  'conn.connect': 'Kiểm tra & kết nối',
+  'conn.useSameOrigin': 'Dùng địa chỉ hiện tại',
 
   'realtime.polling': 'Realtime đang dùng polling',
   'realtime.pollingHelp':
@@ -170,6 +180,7 @@ export const vi = {
   'folders.outputHint': 'Để trống để dùng thư mục mặc định trong thư mục dữ liệu.',
   'folders.confirmTitle': 'Thay đổi thư mục gốc?',
   'folders.confirmBody': 'Doto Skill sẽ được phép đọc (và ghi vào thư mục xuất) các đường dẫn sau:',
+  'folders.hostDisks': 'Ổ đĩa trên máy chủ',
   'path.absolute': 'Cần đường dẫn tuyệt đối (ví dụ D:\\Videos hoặc /Users/ten/Videos).',
 
   // ---- dashboard
@@ -419,6 +430,8 @@ export const vi = {
   'server.restart': 'Khởi động lại',
   'server.stopTitle': 'Dừng máy chủ web?',
   'server.stopBody': 'Mọi thiết bị đang xem sẽ bị ngắt kết nối. Cửa sổ desktop vẫn hoạt động bình thường.',
+  'server.stopRemoteWarn':
+    'Bạn đang điều khiển từ trình duyệt Web. Nếu dừng máy chủ web lúc này, trình duyệt này sẽ mất kết nối và bạn sẽ cần bật lại từ cửa sổ hoặc khay hệ thống của bản App trên máy chủ.',
   'server.config': 'Cấu hình',
   'server.configDesc': 'Thay đổi có hiệu lực sau khi khởi động lại máy chủ web.',
   'server.mode': 'Chế độ',
@@ -534,6 +547,10 @@ export const vi = {
   'perf.running': 'chạy',
   'perf.queued': 'chờ',
   'perf.reprobe': 'Dò lại & encode thử',
+  'perf.benchmark': 'Benchmark 720p',
+  'perf.benchDone': 'Đã hoàn tất benchmark encoder',
+  'perf.benchTitle': 'Kết quả benchmark thực tế (60 khung hình 720p)',
+  'perf.benchTime': 'Thời gian',
   'perf.ffFound': 'Đã tìm thấy',
   'perf.ffMissing': 'Không tìm thấy FFmpeg',
   'perf.ffHint': 'Cài FFmpeg hoặc nhập đường dẫn trong Cài đặt.',
@@ -560,6 +577,13 @@ export const vi = {
   'settings.backup': 'Sao lưu dữ liệu',
   'settings.backupBody': 'Tạo bản sao cơ sở dữ liệu trong thư mục backups của thư mục dữ liệu.',
   'settings.backupDone': 'Đã tạo bản sao lưu',
+  'settings.backupsTitle': 'Sao lưu & khôi phục cơ sở dữ liệu',
+  'settings.backupsDesc': 'Bản sao SQLite trực tuyến nằm trong thư mục dữ liệu trên máy chủ (token bí mật lưu riêng trong OS vault).',
+  'settings.backupsEmpty': 'Chưa có bản sao lưu nào.',
+  'settings.restore': 'Khôi phục',
+  'settings.restoreTitle': 'Khôi phục từ “{file}”?',
+  'settings.restoreBody': 'Cơ sở dữ liệu hiện tại sẽ được thay thế bằng bản sao lưu này.',
+  'settings.restored': 'Đã khôi phục cơ sở dữ liệu',
   'settings.account': 'Tài khoản',
   'settings.signedInAs': 'Đăng nhập: {name}',
   'settings.desktopSession': 'cửa sổ desktop',
@@ -599,6 +623,7 @@ export const vi = {
   'share.copied': 'Đã sao chép link',
   'share.revoke': 'Thu hồi',
   'share.revoked': 'Đã thu hồi link',
+  'share.hiddenToken': 'URL chỉ hiển thị một lần lúc tạo',
   'share.expires': 'Hết hạn',
   'share.minutes': '{n} phút',
   'share.hours': '{n} giờ',
@@ -614,7 +639,7 @@ export const vi = {
   // ---- help
   'help.desc': 'Hướng dẫn nhanh sử dụng Doto Skill.',
   'help.start.title': 'Bắt đầu',
-  'help.start.1': 'Cửa sổ desktop là nơi duy nhất cài phần mềm, đổi thư mục và cấu hình mạng.',
+  'help.start.1': 'Bản App và bản Web có đầy đủ chức năng quản trị như nhau cho Chủ sở hữu; bản Web kết nối và dùng phần cứng của máy chủ bản App.',
   'help.start.2': 'Chọn chế độ tài nguyên phù hợp trong Hiệu năng; Cân bằng là mặc định an toàn.',
   'help.start.3': 'Mọi thao tác rủi ro đều có hộp xác nhận — hãy đọc kỹ trước khi đồng ý.',
   'help.skills.title': 'Skills',

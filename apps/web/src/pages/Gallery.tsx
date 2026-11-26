@@ -161,13 +161,25 @@ export function PlayerPage() {
 
 const SHARE_TTLS = [60, 24 * 60, 7 * 24 * 60];
 
-/** Owner tạo/thu hồi link chia sẻ có hạn cho video đã xuất (API: POST /api/videos/:id/share, DELETE /api/shares/:id). */
+/** Owner tạo/thu hồi link chia sẻ có hạn cho video đã xuất (API: GET/POST /api/videos/:id/shares|share, DELETE /api/shares/:id). */
 function SharePanel({ videoId }: { videoId: string }) {
   const { t, lang } = useI18n();
   const toast = useToast();
   const [ttl, setTtl] = useState(String(SHARE_TTLS[0]));
   const [confirm, setConfirm] = useState(false);
   const [links, setLinks] = useState<ShareLink[]>([]);
+  useEffect(() => {
+    let alive = true;
+    api.videos
+      .shares(videoId)
+      .then((list) => {
+        if (alive && Array.isArray(list)) setLinks(list);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [videoId]);
   const label = (m: number) => (m >= 1440 ? t('share.days', { n: m / 1440 }) : m >= 60 ? t('share.hours', { n: m / 60 }) : t('share.minutes', { n: m }));
 
   async function copy(url: string) {
@@ -198,13 +210,15 @@ function SharePanel({ videoId }: { videoId: string }) {
         <ul className="mt-3 flex flex-col gap-2">
           {links.map((l) => (
             <li key={l.id} className="flex flex-wrap items-center gap-2 rounded-md bg-surface-2 p-2 text-sm">
-              <code className="min-w-0 flex-1 break-all">{l.url}</code>
+              <code className="min-w-0 flex-1 break-all">{l.url ?? `Link #${l.id.slice(0, 8)} (${t('share.hiddenToken')})`}</code>
               <span className="text-muted">
                 {t('share.expires')}: {formatDate(l.expiresAt, lang)}
               </span>
-              <Button size="sm" onClick={() => void copy(l.url)}>
-                {t('share.copy')}
-              </Button>
+              {l.url && (
+                <Button size="sm" onClick={() => void copy(l.url!)}>
+                  {t('share.copy')}
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="danger"

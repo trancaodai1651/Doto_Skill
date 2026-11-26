@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Button, Card, Checkbox, ConfirmDialog, Select, TextInput } from '@doto/ui';
 import { api } from '../api/client';
-import type { AppSettings } from '../api/types';
-import { AsyncView, Code, HostOnly, PageHeader, useNotify } from '../components/common';
+import type { AppSettings, BackupEntry } from '../api/types';
+import { AsyncView, Code, HostOnly, PageHeader, ServerConnectionBox, useNotify } from '../components/common';
 import { useI18n } from '../i18n';
 import type { Lang } from '../i18n';
+import { formatBytes, formatDate } from '../lib/format';
 import { useApi } from '../lib/useApi';
 import { useCaps, useSession } from '../state/session';
 import { useTheme } from '../state/theme';
@@ -13,11 +14,17 @@ import { FoldersForm } from './Onboarding';
 
 export function SettingsPage() {
   const { t } = useI18n();
+  const { isDesktopWindow } = useCaps();
   const settings = useApi('settings', () => api.settings.get());
   return (
     <>
       <PageHeader title={t('nav.settings')} description={t('settings.desc')} />
       <div className="flex flex-col gap-4">
+        {!isDesktopWindow && (
+          <Card title={t('conn.title')} description={t('conn.desc')}>
+            <ServerConnectionBox />
+          </Card>
+        )}
         <AppearanceCard settings={settings.data} />
         <AsyncView state={settings}>
           {(s) => (
@@ -27,6 +34,7 @@ export function SettingsPage() {
             </>
           )}
         </AsyncView>
+        <BackupsCard onRestored={() => void settings.reload()} />
         <AccountCard />
       </div>
     </>
@@ -143,13 +151,93 @@ function SystemCard({ settings, onSaved }: { settings: AppSettings; onSaved: (s:
           try {
             const r = await api.system.backup();
             setConfirmBackup(false);
-            notify.ok(t('settings.backupDone'), r && typeof r === 'object' && r.path ? r.path : undefined);
+            const fileLabel = r && typeof r === 'object' ? (r.file ?? r.path) : undefined;
+            notify.ok(t('settings.backupDone'), fileLabel);
           } finally {
             setBackupBusy(false);
           }
         }}
       >
         <p>{t('settings.backupBody')}</p>
+      </ConfirmDialog>
+    </Card>
+  );
+}
+
+function BackupsCard({ onRestored }: { onRestored: () => void }) {
+  const { t, lang } = useI18n();
+  const notify = useNotify();
+  const backups = useApi('backups', () => api.system.backups());
+  const [creating, setCreating] = useState(false);
+  const [restoreTarget, setRestoreTarget] = useState<BackupEntry | null>(null);
+
+  return (
+    <Card
+      title={t('settings.backupsTitle')}
+      description={t('settings.backupsDesc')}
+      actions={
+        <div className="flex gap-2">
+          <Button size="sm" onClick={() => void backups.reload()} loading={backups.loading}>
+            {t('common.reload')}
+          </Button>
+          <Button
+            size="sm"
+            variant="primary"
+            loading={creating}
+            onClick={async () => {
+              setCreating(true);
+              try {
+                const r = await api.system.backup();
+                notify.ok(t('settings.backupDone'), r?.file);
+                await backups.reload();
+              } catch (e) {
+                notify.fail(e);
+              } finally {
+                setCreating(false);
+              }
+            }}
+          >
+            {t('settings.backup')}
+          </Button>
+        </div>
+      }
+    >
+      <AsyncView state={backups} isEmpty={(l) => l.length === 0} empty={<p className="text-sm text-muted">{t('settings.backupsEmpty')}</p>}>
+        {(list) => (
+          <ul className="divide-y divide-line text-sm">
+            {list.map((b) => (
+              <li key={b.file} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                <div>
+                  <Code>{b.file}</Code>
+                  <span className="ml-2 text-xs text-muted">
+                    {formatBytes(b.sizeBytes)} · {formatDate(b.createdAt, lang)}
+                  </span>
+                </div>
+                <Button size="sm" variant="secondary" onClick={() => setRestoreTarget(b)}>
+                  {t('settings.restore')}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </AsyncView>
+      <ConfirmDialog
+        open={restoreTarget !== null}
+        tone="danger"
+        title={t('settings.restoreTitle', { file: restoreTarget?.file ?? '' })}
+        confirmLabel={t('settings.restore')}
+        cancelLabel={t('common.cancel')}
+        onCancel={() => setRestoreTarget(null)}
+        onConfirm={async () => {
+          if (!restoreTarget) return;
+          await api.system.restore(restoreTarget.file);
+          setRestoreTarget(null);
+          notify.ok(t('settings.restored'));
+          onRestored();
+          await backups.reload();
+        }}
+      >
+        <p>{t('settings.restoreBody')}</p>
       </ConfirmDialog>
     </Card>
   );

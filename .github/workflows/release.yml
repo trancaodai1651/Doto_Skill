@@ -75,8 +75,11 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           APP=$(ls -d target/universal-apple-darwin/release/bundle/macos/*.app | head -1)
-          lipo "$APP/Contents/MacOS/doto-skill" -verify_arch x86_64 arm64
-          lipo -info "$APP/Contents/MacOS/doto-skill"
+          for BIN in "$APP"/Contents/MacOS/*; do
+            lipo "$BIN" -verify_arch x86_64 arm64
+            lipo -info "$BIN"
+          done
+          ls "$APP/Contents/Resources/web/index.html"
       - name: Collect artifacts
         shell: bash
         run: |
@@ -115,7 +118,8 @@ jobs:
       - name: Checksums
         working-directory: artifacts
         run: |
-          sha256sum * > SHA256SUMS.txt
+          rm -f SHA256SUMS.txt
+          sha256sum -- * > SHA256SUMS.txt
           cat SHA256SUMS.txt
       - name: Create release
         env:

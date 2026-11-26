@@ -18,6 +18,17 @@ pub struct EncoderInfo {
     pub error: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct EncoderBenchmark {
+    pub name: String,
+    pub kind: String,
+    pub vendor: String,
+    pub frames: u32,
+    pub elapsed_ms: u64,
+    pub fps: f64,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct EncoderProbe {
@@ -112,6 +123,47 @@ pub async fn probe_all(ffmpeg: &Path, version: Option<String>) -> anyhow::Result
         encoders.push(EncoderInfo { name: name.into(), kind: kind.into(), vendor: vendor.into(), available, working, error });
     }
     Ok(EncoderProbe { encoders, probed_at: Some(doto_core::now_rfc3339()), ffmpeg_version: version })
+}
+
+/// Benchmark ngắn (60 khung hình 1280x720 @30fps → null muxer) trên các encoder đã hoạt động.
+pub async fn benchmark_working(ffmpeg: &Path, probe: &EncoderProbe, threads: usize) -> Vec<EncoderBenchmark> {
+    const FRAMES: u32 = 60;
+    let mut list: Vec<(String, String, String)> =
+        probe.encoders.iter().filter(|e| e.working).map(|e| (e.name.clone(), e.kind.clone(), e.vendor.clone())).collect();
+    if list.is_empty() {
+        list.push(("libx264".into(), "software".into(), "x264".into()));
+    }
+    let mut out = vec![];
+    for (name, kind, vendor) in list {
+        let mut cmd = command(ffmpeg);
+        cmd.args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=1280x720:rate=30:duration=2",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:v",
+            &name,
+        ]);
+        if name == "libx264" {
+            cmd.args(["-preset", "veryfast", "-threads", &threads.max(1).to_string()]);
+        }
+        cmd.args(["-frames:v", &FRAMES.to_string(), "-f", "null", "-"]);
+        let t0 = std::time::Instant::now();
+        if let Ok(Ok(res)) = tokio::time::timeout(Duration::from_secs(30), cmd.output()).await {
+            if res.status.success() {
+                let elapsed_ms = t0.elapsed().as_millis().max(1) as u64;
+                let fps = ((FRAMES as f64 * 1000.0 / elapsed_ms as f64) * 10.0).round() / 10.0;
+                out.push(EncoderBenchmark { name, kind, vendor, frames: FRAMES, elapsed_ms, fps });
+            }
+        }
+    }
+    out.sort_by(|a, b| b.fps.partial_cmp(&a.fps).unwrap_or(std::cmp::Ordering::Equal));
+    out
 }
 
 #[cfg(test)]

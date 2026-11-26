@@ -8,6 +8,7 @@ import {
   AddFolderSourceForm,
   AddGithubSourceForm,
   HardwareView,
+  HostDiskHints,
   InstallMethodButton,
   LanConfirmDialog,
   LimitsTable,
@@ -274,6 +275,9 @@ export function FoldersForm({ settings, onSaved }: { settings: AppSettings; onSa
               }}
             />
             <Button onClick={addDir}>{t('folders.add')}</Button>
+          </div>
+          <div className="mt-2">
+            <HostDiskHints onSelect={(m) => setNewDir((cur) => cur || m)} />
           </div>
         </div>
         <TextInput

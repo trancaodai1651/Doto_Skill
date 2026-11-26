@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Button, Tabs, TextInput } from '@doto/ui';
-import { api, errorMessage } from '../api/client';
+import { api, errorMessage, http } from '../api/client';
+import { ServerConnectionBox } from '../components/common';
 import { Toolbar } from '../components/Layout';
 import { useT } from '../i18n';
 import { guessDeviceName } from '../lib/format';
@@ -46,7 +47,8 @@ export function LoginPage() {
     setBusy(true);
     setError(null);
     try {
-      const me = await api.auth.login(username.trim(), password, deviceName.trim() || undefined);
+      const authMode = http.isCrossOrigin() ? 'bearer' : undefined;
+      const me = await api.auth.login(username.trim(), password, deviceName.trim() || undefined, authMode);
       if (me && typeof me === 'object' && 'user' in me) setMe(me);
       await refresh();
     } catch (err) {
@@ -67,7 +69,9 @@ export function LoginPage() {
     setBusy(true);
     setError(null);
     try {
-      await api.auth.pair(c, deviceName.trim());
+      const authMode = http.isCrossOrigin() ? 'bearer' : undefined;
+      const me = await api.auth.pair(c, deviceName.trim(), authMode);
+      if (me && typeof me === 'object' && 'user' in me) setMe(me);
       clearPairParam();
       await refresh();
     } catch (err) {
@@ -164,6 +168,9 @@ export function LoginPage() {
           </form>
         )}
       </Tabs>
+      <div className="mt-4">
+        <ServerConnectionBox />
+      </div>
     </div>
   );
 }

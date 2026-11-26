@@ -3,19 +3,22 @@
 > Đọc trước: `AGENTS.md` → `docs/shared/PROJECT_MEMORY.md` → `docs/shared/ROADMAP.md` → `docs/shared/TASK_BOARD.md` → file này.
 > Sau khi làm: cập nhật `docs/shared/*` rồi `npm run handoff -- --agent claude --summary "..." --next "..."` (đồng bộ cả 3 file handoff).
 
-## Phiên gần nhất (2026-11-26 · claude)
-**Đã làm:** Khởi tạo Doto Skill v0.1.0 trên nền Rust/Tauri/React (P0–P4 đạt; P5/P6 phần lớn). Bản Node v0.2 cũ được giữ tại `legacy/studio-v0.2/`.
+## Phiên gần nhất (2026-11-26 · antigravity)
+**Đã làm:**
+- Đồng bộ đầy đủ 100% tính năng giữa bản App Desktop và bản Web cho Owner (`ADR-013`), kết nối tới phần cứng máy chủ của bản App (hỗ trợ cả truy cập trực tiếp LAN/Tunnel lẫn nhập URL máy chủ từ bản Web độc lập qua CORS Bearer + vé media ngắn hạn `POST /api/auth/ticket`).
+- Bổ sung sao lưu & khôi phục SQLite (`GET /api/system/backups`, `POST /api/system/restore`), benchmark encoder 720p (`POST /api/system/ffmpeg/benchmark`), danh sách link chia sẻ video (`GET /api/videos/:id/shares`), gợi ý ổ đĩa máy chủ, xác minh binary FFmpeg thật, chống self-deadlock khi restart server từ bản Web và sửa lỗi crash sự kiện log tunnel.
+- Hoàn tất kiểm thử (101 Rust + 33 Web unit + 4 Playwright E2E), đóng gói và phát hành GitHub Release `v0.1.0`.
 
-**File/module cốt lõi:** `crates/{core,system,media,skills,integrations,server}`, `apps/desktop/src-tauri`, `apps/web`, `packages/ui`, `scripts/*.mjs`, `.github/workflows/{ci,release}.yml`, `docs/API.md`.
+**File/module cốt lõi:** `crates/{core,system,media,skills,integrations,server}`, `apps/desktop/src-tauri`, `apps/web`, `packages/ui`, `scripts/*.mjs`, `.github/workflows/{ci,release}.yml`, `docs/API.md`, `docs/SECURITY.md`.
 
 **Tests (máy dev Windows 11, 2026-11-26):** xem khối "Lần chạy test gần nhất" bên dưới và `docs/shared/LAST_TEST_RUN.md`.
 
 **Blocker:** B1 OAuth client_id cho GitHub Device Flow · B2 tài khoản Cloudflare để kiểm chứng tunnel thật · B3 chứng chỉ ký mã (chi tiết: `TASK_BOARD.md`).
 
 ## Việc tiếp theo gợi ý cho Claude Code
-1. Theo dõi CI của PR `feat/initial-platform` trên GitHub (Windows + macOS); sửa lỗi riêng macOS nếu có (keyring Keychain trong test dùng `DOTO_SECRETS=memory`).
-2. Khi CI xanh: merge → tag `v0.1.0` → kiểm tra Release workflow, tải asset và đối chiếu `SHA256SUMS.txt`.
-3. Nếu người dùng cung cấp OAuth App client_id: thêm biến `DOTO_GITHUB_CLIENT_ID` (repo variable) vào bước build release và kiểm chứng Device Flow với repo private.
+1. Nếu chủ sở hữu cung cấp OAuth App `client_id`: cấu hình `DOTO_GITHUB_CLIENT_ID` trong CI/Release workflow và kiểm chứng GitHub Device Flow với repo private.
+2. Tích hợp xác minh tuỳ chọn header `Cf-Access-Jwt-Assertion` (Cloudflare Access JWT) trên listener Public cho môi trường xuất bản Internet.
+3. Khi có chứng chỉ ký số Apple Developer / Windows Authenticode, cấu hình GitHub Secrets theo `docs/RELEASE.md` và phát hành bản signed/notarized.
 
 Cách chạy tiếp:
 ```

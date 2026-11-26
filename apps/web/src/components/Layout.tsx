@@ -114,8 +114,10 @@ function Brand() {
 export function AdminLayout() {
   const { t } = useI18n();
   const { remoteOwner } = useCaps();
+  const { me, serverUrl } = useSession();
   const [moreOpen, setMoreOpen] = useState(false);
   const location = useLocation();
+  const connectedHost = me?.hostname ? `${me.hostname}${serverUrl ? ` · ${serverUrl}` : ''}` : serverUrl || (typeof window !== 'undefined' ? window.location.host : '');
   const linkClass = ({ isActive }: { isActive: boolean }) =>
     cx(
       'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium',
@@ -157,8 +159,15 @@ export function AdminLayout() {
           </div>
         </header>
         {remoteOwner && (
-          <div className="border-b border-line bg-warning-bg px-4 py-2 text-sm text-warning" role="note" data-testid="remote-owner-banner">
-            {t('host.remoteBanner')}
+          <div
+            className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-info-bg/60 px-4 py-1.5 text-xs text-fg"
+            role="status"
+            data-testid="remote-owner-banner"
+          >
+            <span>🖥 {t('host.remoteBanner', { host: connectedHost })}</span>
+            <NavLink to="/settings" className="font-semibold text-primary underline">
+              {t('conn.change')}
+            </NavLink>
           </div>
         )}
         <main id="main" className="pb-safe mx-auto w-full max-w-6xl flex-1 px-4 pt-5 md:px-6" tabIndex={-1}>

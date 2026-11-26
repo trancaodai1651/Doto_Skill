@@ -82,8 +82,9 @@ describe('i18n translate', () => {
     const missing = Object.keys(viDict).filter((k) => !(k in en));
     expect(missing).toEqual([]);
   });
-  it('real dictionaries: host-only message is the required wording', () => {
-    expect(translate('vi', 'host.only')).toBe('Chỉ thực hiện được trên cửa sổ ứng dụng desktop');
+  it('real dictionaries: owner & remote-host parity messages are present', () => {
+    expect(translate('vi', 'host.only')).toBe('Chỉ dành cho Chủ sở hữu');
+    expect(translate('vi', 'host.remoteBanner', { host: 'PC-HOST' })).toContain('PC-HOST');
   });
 });
 

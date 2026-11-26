@@ -28,6 +28,7 @@ export function ServerPage() {
 function ServerStatusCard() {
   const { t, lang } = useI18n();
   const notify = useNotify();
+  const { isDesktopWindow } = useCaps();
   const status = useApi('server-status', () => api.server.status());
   const guide = useApi('fw', () => api.server.firewallGuide());
   const [busy, setBusy] = useState<string | null>(null);
@@ -124,6 +125,11 @@ function ServerStatusCard() {
               }}
             >
               <p>{t('server.stopBody')}</p>
+              {!isDesktopWindow && (
+                <p className="mt-2 rounded-md bg-warning-bg p-2 text-sm text-warning" role="note">
+                  ⚠ {t('server.stopRemoteWarn')}
+                </p>
+              )}
             </ConfirmDialog>
           </div>
         )}
@@ -273,7 +279,13 @@ function TunnelCard() {
   const status = useApi('tunnel', () => api.tunnel.status());
   const [confirm, setConfirm] = useState<'start' | 'deleteToken' | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  useServerEvent('tunnel', (s) => status.setData(s));
+  useServerEvent('tunnel', (s) => {
+    if (s && typeof s === 'object' && 'running' in s && Array.isArray(s.logTail)) {
+      status.setData(s);
+    } else {
+      void status.reload();
+    }
+  });
 
   return (
     <Card title={t('tunnel.title')} description={t('tunnel.desc')}>
