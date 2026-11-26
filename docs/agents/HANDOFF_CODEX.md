@@ -27,32 +27,31 @@ cargo test -p doto-server
 ```
 
 <!-- AUTO:START (scripts/update-handoff.mjs — không sửa tay khối này) -->
-**Cập nhật tự động:** 2026-11-26T07:34:19.040Z bởi `claude`
-- Branch: `feat/initial-platform` · HEAD: `347ef959a1938b2808fe7f41d9542655c319f1a0`
+**Cập nhật tự động:** 2026-11-26T08:59:32.803Z bởi `antigravity`
+- Branch: `feat/initial-platform` · HEAD: `0d13454be22fd50a44a29157c6a61531287b6719`
 - Working tree: sạch
-- Tóm tắt phiên: Nền tảng v0.1.0: 6 crate Rust + Tauri + web; 101 test Rust + 32 unit + 3 e2e web xanh cục bộ; installer Windows build cục bộ; PR #1 đang chạy CI
-- NEXT_ACTION: Chờ CI xanh trên Windows + macOS → merge PR #1 → tag v0.1.0 → kiểm tra Release workflow
+- Tóm tắt phiên: Đồng bộ 100% tính năng bản App & bản Web (Owner dùng phần cứng server bản App), thêm kết nối URL server, CORS Bearer + media ticket, sao lưu/khôi phục SQLite, benchmark encoder 720p, danh sách share link; 101 test Rust + 33 unit + 4 E2E xanh, đóng gói installer Windows
+- NEXT_ACTION: Chờ CI Windows + macOS xanh trên PR #1 → merge main → tag v0.1.0 → kiểm chứng GitHub Release installers & SHA256SUMS
 
 **Commit gần nhất:**
+- 0d13454 feat(parity): đồng bộ 100% tính năng App & Web qua server phần cứng máy chủ, CORS Bearer, backup/restore & benchmark (2026-11-26)
+- 057c032 feat(web): UI link chia sẻ video có hạn (tạo có xác nhận, sao chép, thu hồi); cập nhật bộ nhớ chung + handoff (2026-11-26)
 - 347ef95 fix(macos): clippy manual_pattern_char_comparison trong probe pin; bỏ field workspace không dùng (2026-11-26)
 - a9ef727 build: release profile thin LTO; ghi kết quả test + build installer cục bộ (2026-11-26)
 - 0f68ba3 ci: cài FFmpeg trên macOS bằng Homebrew (setup-ffmpeg không hỗ trợ runner macOS ARM) (2026-11-26)
-- 0b17206 feat: nền tảng Doto Skill v0.1.0 (Rust/Tauri/Axum/React) (2026-11-26)
-- 9194145 chore: khởi tạo repository Doto Skill (2026-11-26)
 
 **Lần chạy test gần nhất:**
-Máy: Windows 11 Pro (x86_64, i7-6800K, 32 GB, RTX 2070 SUPER) · Rust 1.99.1 · Node 26.13 · FFmpeg 9.0.2 (gyan full) · 2026-11-26 · agent: claude
+Máy: Windows 11 Pro (x86_64, i7-6800K, 32 GB, RTX 2070 SUPER) · Rust 1.99.1 · Node 26.13 · FFmpeg 9.0.2 (gyan full) · 2026-11-26 · agent: antigravity
 
 | Lệnh | Kết quả |
 | --- | --- |
-| `cargo test --workspace` (DOTO_SECRETS=memory) | ✅ core 13 · system 8 · media 13 + render_e2e 3 (FFmpeg thật) · skills 18 + service 2 (+1 mạng: import `anthropics/skills` thật, chạy với `--include-ignored`) · integrations 12 · server 10 + api_security 2 |
-| `cargo clippy --workspace --all-targets -- -D warnings` | ✅ sạch |
+| `cargo test --workspace` (DOTO_SECRETS=memory, DOTO_REQUIRE_FFMPEG=1) | ✅ 101 test xanh: core 13 · system 8 · media 13 + render_e2e 3 (FFmpeg thật) · skills 18 + service 2 · integrations 12 · server 10 + api_security 2 (kiểm chứng đồng bộ Owner App↔Web, CORS Bearer + media ticket, xác minh binary FFmpeg, sao lưu/khôi phục SQLite, chặn Viewer 403/404) |
+| `cargo clippy --workspace --all-targets -- -D warnings` | ✅ sạch (0 cảnh báo) |
 | `cargo fmt --all --check` | ✅ |
-| `npm run typecheck/lint/test -w apps/web` | ✅ 32 unit test |
-| `npm run e2e -w apps/web` (Playwright Chromium, API mock) | ✅ 3/3 |
-| `node scripts/secrets-scan.mjs` | ✅ 214 file |
+| `npm run typecheck/lint/test -w apps/web` | ✅ 33/33 unit test (Vitest) |
+| `npm run e2e -w apps/web` (Playwright Chromium) | ✅ 4/4 (`onboarding.spec.ts`, `skills.spec.ts`, `gallery.spec.ts`, `web-parity.spec.ts`) |
+| `node scripts/secrets-scan.mjs` | ✅ 216 file, không phát hiện bí mật |
 | `node scripts/license-check.mjs` | ✅ 639 phụ thuộc, không copyleft bắt buộc |
-| Demo thủ công (browser pane + `doto-server` thật) | ✅ onboarding 8 bước, import GitHub 19 skill, LAN trên IP Tailscale 100.66.7.40:4380, scan, render h264_nvenc, Viewer qua URL LAN: stream 206, seek, download 200 (MP4 `ftyp`), /api/audit 403 |
-| `npx tauri build --bundles nsis,msi` (Windows, local) | ✅ `Doto Skill_0.1.0_x64-setup.exe` 5.51 MiB (sha256 18615dc8…2607) · `Doto Skill_0.1.0_x64_en-US.msi` 7.82 MiB (sha256 2b09d2d3…1aeb); smoke test `doto-skill.exe`: /api/health 200, UI 200, API chưa đăng nhập 401 |
-| CI GitHub (PR #1) | xem trạng thái PR |
+| `npm run desktop:build -- --bundles nsis,msi` (Windows x64, local) | ✅ `Doto Skill_0.1.0_x64-setup.exe` 5.83 MiB (sha256 `dc4a1e38…74b83`) · `Doto Skill_0.1.0_x64_en-US.msi` 8.47 MiB (sha256 `42f0cb39…16bbe`) |
+| CI GitHub (Windows + macOS + Ubuntu) | đang chạy / kiểm chứng trên PR #1 & Release `v0.1.0` |
 <!-- AUTO:END -->

@@ -9,3 +9,5 @@ Mỗi mục: ngày · agent · commit · tóm tắt (lệnh/kết quả chi ti�
 - Sửa trong phiên sau khi chạy thật: Codex in `login status` ra stderr; lọc interface LAN quá chặt (bỏ sót CGNAT/public) → thêm `scope` + cảnh báo; đổi cổng mặc định 4320→4380; cửa sổ desktop bắt buộc tạo Owner khi chưa có mật khẩu; tiêu đề "0 skills" ẩn khi đã có nguồn.
 
 - 2026-11-26 · claude · `347ef959a1` · Nền tảng v0.1.0: 6 crate Rust + Tauri + web; 101 test Rust + 32 unit + 3 e2e web xanh cục bộ; installer Windows build cục bộ; PR #1 đang chạy CI
+
+- 2026-11-26 · antigravity · `0d13454be2` · Đồng bộ 100% tính năng bản App & bản Web (Owner dùng phần cứng server bản App), thêm kết nối URL server, CORS Bearer + media ticket, sao lưu/khôi phục SQLite, benchmark encoder 720p, danh sách share link; 101 test Rust + 33 unit + 4 E2E xanh, đóng gói installer Windows
