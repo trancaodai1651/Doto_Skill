@@ -11,6 +11,7 @@ pub mod db;
 pub mod events;
 pub mod jobs;
 pub mod paths;
+pub mod process;
 pub mod secrets;
 pub mod settings;
 

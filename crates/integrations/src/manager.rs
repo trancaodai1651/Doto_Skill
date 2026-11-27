@@ -50,15 +50,11 @@ pub struct ToolManager {
 }
 
 fn home_dir() -> PathBuf {
-    std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from).unwrap_or_default()
+    doto_core::paths::user_home_dir().unwrap_or_default()
 }
 
 pub fn command(program: &Path) -> tokio::process::Command {
-    let mut cmd = tokio::process::Command::new(program);
-    cmd.stdin(Stdio::null()).kill_on_drop(true);
-    #[cfg(windows)]
-    cmd.creation_flags(0x0800_0000);
-    cmd
+    doto_core::process::headless_tokio_command(program)
 }
 
 /// Chạy chương trình với đối số cố định (không qua shell), timeout, trả (exit_ok, stdout+stderr đã lọc).
@@ -86,7 +82,7 @@ impl ToolManager {
 
     /// Tìm executable: PATH → vị trí cài thông dụng → thư mục bin riêng của app.
     pub fn locate(&self, p: &dyn CliProvider) -> Option<PathBuf> {
-        let own = self.bin_dir.join(if cfg!(windows) { format!("{}.exe", p.binary()) } else { p.binary().to_string() });
+        let own = self.bin_dir.join(doto_core::paths::exe_name(p.binary()));
         which::which(p.binary()).ok().or_else(|| p.common_locations(&self.home).into_iter().find(|c| c.is_file())).or_else(|| own.is_file().then_some(own))
     }
 

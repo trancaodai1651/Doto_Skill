@@ -1,15 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router';
-import { Badge, Button, ConfirmDialog, EmptyState, Select, TextInput, useToast } from '@doto/ui';
-import { api, http } from '../api/client';
+import { Badge, EmptyState, Select, TextInput, useToast } from '@doto/ui';
+import { api } from '../api/client';
 import { useServerEvent } from '../api/events';
-import type { ShareLink, VideoAsset, VideoKind } from '../api/types';
-import { AsyncView, KeyValue, PageHeader, useNotify } from '../components/common';
-import { VideoThumb, videoMeta } from '../components/video';
+import type { VideoAsset, VideoKind } from '../api/types';
+import { AsyncView, KeyValue, PageHeader } from '../components/common';
+import { SaveToPhotosButton, SharePanel, VideoThumb, videoMeta } from '../components/video';
 import { useI18n } from '../i18n';
 import { formatBytes, formatDate, formatDuration, formatResolution } from '../lib/format';
 import { upsertById } from '../lib/list';
-import { useApi } from '../lib/useApi';
+import { useApi, useDebouncedValue } from '../lib/useApi';
 import { useCaps } from '../state/session';
 
 type Sort = 'new' | 'old' | 'title' | 'duration';
@@ -19,13 +19,9 @@ export function GalleryPage() {
   const { isOwner } = useCaps();
   const { push } = useToast();
   const [q, setQ] = useState('');
-  const [debounced, setDebounced] = useState('');
+  const debounced = useDebouncedValue(q.trim());
   const [kind, setKind] = useState<VideoKind | ''>(isOwner ? 'export' : '');
   const [sort, setSort] = useState<Sort>('new');
-  useEffect(() => {
-    const h = setTimeout(() => setDebounced(q.trim()), 250);
-    return () => clearTimeout(h);
-  }, [q]);
   const videos = useApi(`gallery:${kind}:${debounced}`, () => api.videos.list(kind, debounced || undefined));
   useServerEvent('video', (v) => {
     const isNew = !(videos.data ?? []).some((x) => x.id === v.id);
@@ -157,151 +153,5 @@ export function PlayerPage() {
         )}
       </AsyncView>
     </>
-  );
-}
-
-const SHARE_TTLS = [60, 24 * 60, 7 * 24 * 60];
-
-function SaveToPhotosButton({ video }: { video: VideoAsset }) {
-  const { t } = useI18n();
-  const notify = useNotify();
-  const [busy, setBusy] = useState(false);
-
-  return (
-    <Button
-      variant="secondary"
-      loading={busy}
-      data-testid="save-photos-btn"
-      onClick={async () => {
-        setBusy(true);
-        try {
-          const url = api.videos.downloadUrl(video.id);
-          const headers: Record<string, string> = {};
-          const bearer = http.getBearerToken();
-          if (bearer) headers['Authorization'] = `Bearer ${bearer}`;
-          const res = await fetch(url, {
-            headers,
-            credentials: http.isCrossOrigin() || bearer ? 'omit' : 'include',
-          });
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const blob = await res.blob();
-          const safeName = video.fileName.toLowerCase().endsWith('.mp4') ? video.fileName : `${video.title || 'video'}.mp4`;
-          const file = new File([blob], safeName, { type: 'video/mp4' });
-          const nav = navigator as Navigator & {
-            canShare?: (data?: ShareData) => boolean;
-          };
-          if (typeof nav.share === 'function' && typeof nav.canShare === 'function' && nav.canShare({ files: [file] })) {
-            await nav.share({ files: [file], title: video.title });
-          } else {
-            const objUrl = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = objUrl;
-            a.download = safeName;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            setTimeout(() => URL.revokeObjectURL(objUrl), 5000);
-            notify.info(t('player.savePhotos'), t('player.shareFallback'));
-          }
-        } catch (e) {
-          if (e instanceof Error && e.name === 'AbortError') return;
-          notify.fail(e);
-        } finally {
-          setBusy(false);
-        }
-      }}
-    >
-      📲 {t('player.savePhotos')}
-    </Button>
-  );
-}
-
-/** Owner tạo/thu hồi link chia sẻ có hạn cho video đã xuất (API: GET/POST /api/videos/:id/shares|share, DELETE /api/shares/:id). */
-function SharePanel({ videoId }: { videoId: string }) {
-  const { t, lang } = useI18n();
-  const toast = useToast();
-  const [ttl, setTtl] = useState(String(SHARE_TTLS[0]));
-  const [confirm, setConfirm] = useState(false);
-  const [links, setLinks] = useState<ShareLink[]>([]);
-  useEffect(() => {
-    let alive = true;
-    api.videos
-      .shares(videoId)
-      .then((list) => {
-        if (alive && Array.isArray(list)) setLinks(list);
-      })
-      .catch(() => undefined);
-    return () => {
-      alive = false;
-    };
-  }, [videoId]);
-  const label = (m: number) => (m >= 1440 ? t('share.days', { n: m / 1440 }) : m >= 60 ? t('share.hours', { n: m / 60 }) : t('share.minutes', { n: m }));
-
-  async function copy(url: string) {
-    try {
-      await navigator.clipboard.writeText(url);
-      toast.push({ tone: 'success', title: t('share.copied') });
-    } catch {
-      window.prompt(t('share.copy'), url);
-    }
-  }
-
-  return (
-    <section className="mt-4 rounded-lg border border-line bg-surface p-4" aria-labelledby="share-title" data-testid="share-panel">
-      <h2 id="share-title" className="font-semibold">
-        {t('share.title')}
-      </h2>
-      <p className="mt-1 text-sm text-muted">{t('share.desc')}</p>
-      <div className="mt-3 flex flex-wrap items-end gap-2">
-        <Select
-          label={t('share.ttl')}
-          value={ttl}
-          onChange={(e) => setTtl(e.target.value)}
-          options={SHARE_TTLS.map((m) => ({ value: String(m), label: label(m) }))}
-        />
-        <Button onClick={() => setConfirm(true)}>{t('share.create')}</Button>
-      </div>
-      {links.length > 0 && (
-        <ul className="mt-3 flex flex-col gap-2">
-          {links.map((l) => (
-            <li key={l.id} className="flex flex-wrap items-center gap-2 rounded-md bg-surface-2 p-2 text-sm">
-              <code className="min-w-0 flex-1 break-all">{l.url ?? `Link #${l.id.slice(0, 8)} (${t('share.hiddenToken')})`}</code>
-              <span className="text-muted">
-                {t('share.expires')}: {formatDate(l.expiresAt, lang)}
-              </span>
-              {l.url && (
-                <Button size="sm" onClick={() => void copy(l.url!)}>
-                  {t('share.copy')}
-                </Button>
-              )}
-              <Button
-                size="sm"
-                variant="danger"
-                onClick={async () => {
-                  await api.videos.revokeShare(l.id);
-                  setLinks((xs) => xs.filter((x) => x.id !== l.id));
-                  toast.push({ tone: 'success', title: t('share.revoked') });
-                }}
-              >
-                {t('share.revoke')}
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
-      <ConfirmDialog
-        open={confirm}
-        title={t('share.confirmTitle')}
-        confirmLabel={t('share.create')}
-        onCancel={() => setConfirm(false)}
-        onConfirm={async () => {
-          const link = await api.videos.share(videoId, Number(ttl));
-          setLinks((xs) => [link, ...xs]);
-          setConfirm(false);
-        }}
-      >
-        <p>{t('share.confirmBody')}</p>
-      </ConfirmDialog>
-    </section>
   );
 }

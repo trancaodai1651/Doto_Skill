@@ -16,11 +16,7 @@ pub struct FfmpegInfo {
 }
 
 fn exe(name: &str) -> String {
-    if cfg!(windows) {
-        format!("{name}.exe")
-    } else {
-        name.to_string()
-    }
+    doto_core::paths::exe_name(name)
 }
 
 /// Vị trí cài đặt thông dụng ngoài PATH.
@@ -85,13 +81,7 @@ pub async fn discover(ffmpeg_cfg: Option<&str>, ffprobe_cfg: Option<&str>) -> an
 }
 
 pub fn command(program: &Path) -> tokio::process::Command {
-    let mut cmd = tokio::process::Command::new(program);
-    cmd.stdin(std::process::Stdio::null()).kill_on_drop(true);
-    #[cfg(windows)]
-    {
-        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
-    }
-    cmd
+    doto_core::process::headless_tokio_command(program)
 }
 
 pub async fn run_with_timeout(program: &Path, args: &[&str], timeout: Duration) -> anyhow::Result<String> {

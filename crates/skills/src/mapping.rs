@@ -65,7 +65,7 @@ pub fn home_dir() -> Option<PathBuf> {
     if let Ok(h) = std::env::var("DOTO_PROVIDER_HOME") {
         return Some(PathBuf::from(h));
     }
-    std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from)
+    doto_core::paths::user_home_dir()
 }
 
 #[derive(Debug, Serialize, Deserialize)]

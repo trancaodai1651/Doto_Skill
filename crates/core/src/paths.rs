@@ -99,6 +99,30 @@ pub fn dunce_canonical(p: &Path) -> Option<PathBuf> {
     Some(c)
 }
 
+/// Thư mục người dùng hiện tại (`%USERPROFILE%` trên Windows, `$HOME` trên Unix).
+pub fn user_home_dir() -> Option<PathBuf> {
+    std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from).filter(|p| !p.as_os_str().is_empty())
+}
+
+/// Tên tệp thực thi theo nền tảng (`<base>.exe` trên Windows, `<base>` trên Unix).
+pub fn exe_name(base: &str) -> String {
+    if cfg!(windows) {
+        format!("{base}.exe")
+    } else {
+        base.to_string()
+    }
+}
+
+/// Kiểm tra tên thư mục/tệp đơn lẻ hợp lệ (không rỗng, không `.`/`..`, không ký tự điều khiển hoặc phân tách đường dẫn).
+pub fn is_safe_single_segment(name: &str, max_chars: usize) -> bool {
+    let n = name.trim();
+    !n.is_empty()
+        && n.chars().count() <= max_chars
+        && n != "."
+        && n != ".."
+        && !n.chars().any(|c| c.is_control() || matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|'))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

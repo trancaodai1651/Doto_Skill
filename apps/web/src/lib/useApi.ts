@@ -65,3 +65,13 @@ export function useAction() {
   }, []);
   return { busy, run };
 }
+
+/** Trả giá trị đã debounce sau `delayMs` ms (mặc định 250ms) để dùng chung cho các ô tìm kiếm. */
+export function useDebouncedValue<T>(value: T, delayMs = 250): T {
+  const [debounced, setDebounced] = useState<T>(value);
+  useEffect(() => {
+    const h = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(h);
+  }, [value, delayMs]);
+  return debounced;
+}

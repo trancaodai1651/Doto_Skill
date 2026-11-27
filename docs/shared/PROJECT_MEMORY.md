@@ -25,7 +25,11 @@ apps/web + packages/ui (React 19, TS strict, Vite, Tailwind 4) → build ra apps
 - **Skills:** 0 nguồn/0 skill ban đầu. Nguồn thư mục (watcher debounce 1.5s, gợi ý ổ đĩa máy chủ) và GitHub (resolve ref→SHA, tải tarball read-only, giải nén an toàn: chặn traversal/symlink/hardlink, giới hạn 200 MB nén/500 MB giải nén/50k entry; check-update hiển thị diff file trước khi apply; pin commit). Cài sang provider = **sao chép** kèm marker `.doto-skill.json`, không ghi đè thư mục người dùng, skill có script cần xác nhận riêng.
 
 ## 3. Quyết định đã chốt
-Xem `docs/shared/DECISIONS.md` (ADR-001…ADR-014).
+Xem `docs/shared/DECISIONS.md` (ADR-001…ADR-015).
+- **Chuẩn tổ chức code, module hóa & tái sử dụng (`ADR-015` — bắt buộc khi mở rộng tính năng):**
+  - Mọi crate lớn đều tổ chức theo thư mục submodule có ranh giới rõ ràng: `crates/server/src/routes/{mod,auth_system,skills_tools,media_jobs}.rs`, `crates/server/src/v02/{mod,fs_uploads,skills_studio}.rs`, `crates/integrations/src/studio/{mod,cli}.rs`, `crates/skills/src/importer/{mod,archive}.rs`.
+  - Mọi tiện ích hệ điều hành & tiến trình con đặt tại `crates/core/src/{paths,process}.rs` (`user_home_dir`, `exe_name`, `is_safe_single_segment`, `headless_std_command`, `headless_tokio_command`, `configure_tokio_command`).
+  - Frontend tách gọn trang (`apps/web/src/pages/*`) khỏi các module component nghiệp vụ dùng chung (`apps/web/src/components/{common,features,video,tunnels,skill-sources,FolderPicker}.tsx`) và hook dùng chung (`useApi`, `useAction`, `useDebouncedValue` trong `apps/web/src/lib/useApi.ts`). Khi thêm tính năng mới, bắt buộc tái sử dụng các tầng này và không để file đơn vượt quá ~600 dòng.
 
 ## 4. Đường dẫn provider (tài liệu chính thức, kiểm tra 2026-11-26)
 | Provider | Skills cấp user | Kiểm tra đăng nhập |

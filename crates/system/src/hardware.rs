@@ -1,7 +1,6 @@
 //! HardwareProbe: đọc thông tin phần cứng thật từ OS. Trường nào không đọc được → None + ghi chú,
 //! không bao giờ bịa giá trị.
 
-use std::process::Command;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -69,13 +68,8 @@ pub fn vendor_of(name: &str) -> &'static str {
 
 /// Chạy lệnh với timeout; trả stdout nếu thành công.
 pub fn run_capture(program: &str, args: &[&str], timeout: Duration) -> Option<String> {
-    let mut cmd = Command::new(program);
-    cmd.args(args).stdin(std::process::Stdio::null()).stderr(std::process::Stdio::null());
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
-    }
+    let mut cmd = doto_core::process::headless_std_command(program);
+    cmd.args(args).stderr(std::process::Stdio::null());
     cmd.stdout(std::process::Stdio::piped());
     let mut child = cmd.spawn().ok()?;
     let start = std::time::Instant::now();

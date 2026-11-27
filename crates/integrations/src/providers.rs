@@ -81,11 +81,7 @@ pub trait CliProvider: Send + Sync {
 }
 
 fn exe(name: &str) -> String {
-    if cfg!(windows) {
-        format!("{name}.exe")
-    } else {
-        name.into()
-    }
+    doto_core::paths::exe_name(name)
 }
 
 fn npm_global_bins(home: &std::path::Path, name: &str) -> Vec<PathBuf> {
