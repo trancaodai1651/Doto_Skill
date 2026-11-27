@@ -38,11 +38,12 @@ fn common_locations(name: &str) -> Vec<PathBuf> {
         v.push(PathBuf::from(r"C:\ProgramData\chocolatey\bin").join(&file));
         v.push(PathBuf::from(r"C:\ffmpeg\bin").join(&file));
     }
-    #[cfg(target_os = "macos")]
+    #[cfg(unix)]
     {
         v.push(PathBuf::from("/opt/homebrew/bin").join(&file));
         v.push(PathBuf::from("/usr/local/bin").join(&file));
         v.push(PathBuf::from("/opt/local/bin").join(&file));
+        v.push(PathBuf::from("/usr/bin").join(&file));
     }
     v
 }

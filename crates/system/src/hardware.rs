@@ -150,7 +150,7 @@ impl HardwareProbe {
 }
 
 fn probe_gpus(notes: &mut Vec<String>) -> Vec<GpuInfo> {
-    let mut gpus = vec![];
+    let mut gpus: Vec<GpuInfo> = vec![];
     #[cfg(windows)]
     {
         let ps = "Get-CimInstance Win32_VideoController | Select-Object Name,AdapterRAM,DriverVersion | ConvertTo-Json -Compress";
