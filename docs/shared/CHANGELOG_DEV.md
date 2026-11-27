@@ -17,3 +17,5 @@ Mỗi mục: ngày · agent · commit · tóm tắt (lệnh/kết quả chi ti�
 - 2026-11-27 · antigravity · `7e05d5e395` · Triển khai trọn bộ P7–P13 lên v0.2.0 (AI Studio đa phiên Antigravity/Claude/Codex, Mobile Upload & App Photos, Import Skill .zip/folder, CRUD đa Tunnel + Cloudflare Access JWT, Trung tâm Memory/Handoff 3 AI, E2E doto-server thật)
 
 - 2026-11-27 · antigravity · `8c2ecc6fe1` · Hoàn tất P0–P13 (v0.2.0): merge PR #2 vào main (cef4894) và phát hành thành công GitHub Release v0.2.0 (45919537257 — Win NSIS/MSI + macOS Universal DMG/app.zip + SHA256SUMS)
+
+- 2026-11-27 · antigravity · `24ff531b67` · Hoàn tất refactor module hóa & tái sử dụng code (ADR-015): tách routes/*, v02/*, studio/*, importer/*, components/*, gom doto_core::{paths,process} & useDebouncedValue, quy định bắt buộc cho mọi tính năng mới
