@@ -26,18 +26,18 @@ npm run dev:server   # mở URL desktop-token được in ra
 ```
 
 <!-- AUTO:START (scripts/update-handoff.mjs — không sửa tay khối này) -->
-**Cập nhật tự động:** 2026-11-27T00:40:56.840Z bởi `antigravity`
-- Branch: `feat/v0.2-studio-p7-p13` · HEAD: `7e05d5e395ae5b92be3def9d424d28ab2d0cbbd5`
+**Cập nhật tự động:** 2026-11-27T01:11:26.653Z bởi `antigravity`
+- Branch: `main` · HEAD: `8c2ecc6fe10f192e1c41f72240d5d23d1f705463`
 - Working tree: sạch
-- Tóm tắt phiên: Triển khai trọn bộ P7–P13 lên v0.2.0 (AI Studio đa phiên Antigravity/Claude/Codex, Mobile Upload & App Photos, Import Skill .zip/folder, CRUD đa Tunnel + Cloudflare Access JWT, Trung tâm Memory/Handoff 3 AI, E2E doto-server thật)
-- NEXT_ACTION: Chờ CI đa nền tảng trên PR v0.2.0 xanh, merge vào main và phát hành GitHub Release v0.2.0
+- Tóm tắt phiên: Hoàn tất P0–P13 (v0.2.0): merge PR #2 vào main (cef4894) và phát hành thành công GitHub Release v0.2.0 (45919537257 — Win NSIS/MSI + macOS Universal DMG/app.zip + SHA256SUMS)
+- NEXT_ACTION: Kiểm thử thêm trên thiết bị di động vật lý cùng Wi-Fi; cấu hình OAuth client_id (B1), Cloudflare domain sản xuất (B2) và chứng chỉ ký mã Authenticode/Apple notarization (B3) khi sẵn sàng
 
 **Commit gần nhất:**
+- 8c2ecc6 docs(release): ghi nhận kết quả CI/Release v0.2.0 và checksum installers (2026-11-27)
+- cef4894 Merge pull request #2 from trancaodai1651/feat/v0.2-studio-p7-p13 (2026-11-27)
+- 871813d fix(system): khai báo kiểu tường minh cho Vec<GpuInfo> khi biên dịch doto-server trên Linux CI (2026-11-27)
+- ad7f049 docs(handoff): đồng bộ bộ nhớ chung và 3 file bàn giao cho v0.2.0 (2026-11-27)
 - 7e05d5e feat(v0.2): triển khai trọn bộ P7–P13 (AI Studio đa phiên, Mobile Upload, Import .zip, CRUD đa Tunnel & Cloudflare Access, Memory 3 AI, E2E thật) (2026-11-27)
-- 23f1785 docs(handoff): đồng bộ trạng thái hoàn tất phát hành v0.1.0 cho 3 AI (2026-11-26)
-- 0592add docs(release): ghi nhận kết quả CI/Release v0.1.0 và checksum installers (2026-11-26)
-- 12084d4 Merge pull request #1 from trancaodai1651/feat/initial-platform (2026-11-26)
-- 66c2ecb docs(handoff): đồng bộ bộ nhớ chung và 3 file bàn giao AI (antigravity) (2026-11-26)
 
 **Lần chạy test gần nhất:**
 Máy: Windows 11 Pro (x86_64, i7-6800K, 32 GB, RTX 2070 SUPER) · Rust 1.99.1 · Node 26.13 · FFmpeg 9.0.2 (gyan full) · 2026-11-27 · agent: antigravity
@@ -51,5 +51,6 @@ Máy: Windows 11 Pro (x86_64, i7-6800K, 32 GB, RTX 2070 SUPER) · Rust 1.99.1 ·
 | `npm run e2e:real` (Playwright chạy trực tiếp trên binary `doto-server` thật) | ✅ 1/1 (`real-server.spec.ts`: desktop one-time token → setup → onboarding 8 bước → bật Public server → import `.zip` skill → ghi bàn giao Memory → tải ảnh mobile → ghép nối Viewer RBAC) |
 | `node scripts/secrets-scan.mjs` + `node scripts/license-check.mjs` | ✅ 228 file sạch bí mật · 639 phụ thuộc không copyleft bắt buộc |
 | `npm run desktop:build -- --bundles nsis,msi` (Windows x64, local `0.2.0`) | ✅ `Doto Skill_0.2.0_x64-setup.exe` 6.27 MiB (`ffda71bd…96b1f`) · `Doto Skill_0.2.0_x64_en-US.msi` 9.10 MiB (`e49b052c…715b5`) |
-| GitHub Actions Release `v0.1.0` (`45788563182`, mốc trước) | ✅ https://github.com/trancaodai1651/Doto_Skill/releases/tag/v0.1.0 |
+| GitHub Actions CI PR #2 (`45919102697`) & `main` (`cef4894`) | ✅ 4/4 job xanh: `Web` + E2E `doto-server` thật (Ubuntu) · `Rust (windows-latest)` · `Rust (macos-latest)` · `Secrets & licenses` |
+| GitHub Actions Release `v0.2.0` (`45919537257`) | ✅ https://github.com/trancaodai1651/Doto_Skill/releases/tag/v0.2.0 — `Doto.Skill_0.2.0_x64-setup.exe` (`c06d34a3…01c4f`) · `Doto.Skill_0.2.0_x64_en-US.msi` (`c3398d64…e8d95`) · `Doto.Skill_0.2.0_universal.dmg` (`26346cae…38921`, `lipo` `x86_64`+`arm64`) · `Doto-Skill_universal.app.zip` (`6b9adbad…7ebdc`) · `SHA256SUMS.txt` (`c6d68e4f…7956b`) · `THIRD_PARTY_LICENSES.tsv` (`995e5927…2e82b`) |
 <!-- AUTO:END -->
