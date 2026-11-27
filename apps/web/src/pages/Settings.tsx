@@ -29,7 +29,11 @@ export function SettingsPage() {
         <AsyncView state={settings}>
           {(s) => (
             <>
-              <FoldersForm key={JSON.stringify([s.videoSourceDirs, s.outputDir])} settings={s} onSaved={(n) => settings.setData(n)} />
+              <FoldersForm
+                key={JSON.stringify([s.videoSourceDirs, s.outputDir, s.mediaUploadDir, s.customSkillDir, s.workspaceMemoryDir])}
+                settings={s}
+                onSaved={(n) => settings.setData(n)}
+              />
               <SystemCard key={JSON.stringify(s)} settings={s} onSaved={(n) => settings.setData(n)} />
             </>
           )}

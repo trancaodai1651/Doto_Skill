@@ -55,6 +55,11 @@ const tasks = {
   e2e: () => {
     run(npm, ['run', 'e2e', '-w', 'apps/web']);
   },
+  'e2e-real': () => {
+    tasks['web-build']();
+    run('cargo', ['build', '-p', 'doto-server', '--bin', 'doto-server'], { env: testEnv });
+    run(npm, ['run', 'e2e:real', '-w', 'apps/web'], { env: testEnv });
+  },
   build: () => {
     tasks['web-build']();
     run('cargo', ['build', '--release', '-p', 'doto-server']);

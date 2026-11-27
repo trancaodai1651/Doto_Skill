@@ -462,3 +462,329 @@ async fn video_e2e_render_stream_range_download_and_idor() {
 
     state.shutdown().await;
 }
+
+fn build_test_zip(entries: &[(&str, &[u8])]) -> Vec<u8> {
+    let mut out = vec![];
+    let mut central = vec![];
+    for (name, data) in entries {
+        let mut crc = flate2::Crc::new();
+        crc.update(data);
+        let off = out.len() as u32;
+        out.extend_from_slice(&0x0403_4b50u32.to_le_bytes());
+        out.extend_from_slice(&[20, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        out.extend_from_slice(&crc.sum().to_le_bytes());
+        out.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        out.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        out.extend_from_slice(&(name.len() as u16).to_le_bytes());
+        out.extend_from_slice(&0u16.to_le_bytes());
+        out.extend_from_slice(name.as_bytes());
+        out.extend_from_slice(data);
+
+        central.extend_from_slice(&0x0201_4b50u32.to_le_bytes());
+        central.extend_from_slice(&[20, 0, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        central.extend_from_slice(&crc.sum().to_le_bytes());
+        central.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        central.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        central.extend_from_slice(&(name.len() as u16).to_le_bytes());
+        central.extend_from_slice(&[0; 12]);
+        central.extend_from_slice(&off.to_le_bytes());
+        central.extend_from_slice(name.as_bytes());
+    }
+    let cd_off = out.len() as u32;
+    out.extend_from_slice(&central);
+    out.extend_from_slice(&0x0605_4b50u32.to_le_bytes());
+    out.extend_from_slice(&[0, 0, 0, 0]);
+    out.extend_from_slice(&(entries.len() as u16).to_le_bytes());
+    out.extend_from_slice(&(entries.len() as u16).to_le_bytes());
+    out.extend_from_slice(&(central.len() as u32).to_le_bytes());
+    out.extend_from_slice(&cd_off.to_le_bytes());
+    out.extend_from_slice(&0u16.to_le_bytes());
+    out
+}
+
+fn make_cf_jwt(iss: &str, aud: &str, exp: i64) -> String {
+    use doto_core::random_token;
+    let b64 = |b: &[u8]| {
+        // dùng hex/base64url không cần thêm dep ngoài: doto_server đã có base64 gián tiếp, ta mã hoá URL_SAFE_NO_PAD thủ công
+        const ALPH: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+        let mut s = String::new();
+        for chunk in b.chunks(3) {
+            let b0 = chunk[0] as u32;
+            let b1 = if chunk.len() > 1 { chunk[1] as u32 } else { 0 };
+            let b2 = if chunk.len() > 2 { chunk[2] as u32 } else { 0 };
+            let n = (b0 << 16) | (b1 << 8) | b2;
+            s.push(ALPH[((n >> 18) & 63) as usize] as char);
+            s.push(ALPH[((n >> 12) & 63) as usize] as char);
+            if chunk.len() > 1 {
+                s.push(ALPH[((n >> 6) & 63) as usize] as char);
+            }
+            if chunk.len() > 2 {
+                s.push(ALPH[(n & 63) as usize] as char);
+            }
+        }
+        s
+    };
+    let hdr = b64(br#"{"alg":"RS256","typ":"JWT"}"#);
+    let payload = b64(json!({ "iss": iss, "aud": [aud], "exp": exp }).to_string().as_bytes());
+    let sig = random_token(24);
+    format!("{hdr}.{payload}.{sig}")
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn v02_studio_upload_archive_tunnels_cf_access_and_memory_parity() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (state, base) = boot(&tmp.path().join("data")).await;
+    let mut d = desktop(&state, &base).await;
+    assert_eq!(d.req(Method::POST, "/api/auth/setup", Some(json!({ "username": "admin", "password": "Strong-pass-2026" }))).await.0, StatusCode::OK);
+
+    // Bật Public Server cho bản Web Owner + Viewer
+    let port = free_port();
+    assert_eq!(d.req(Method::PUT, "/api/server/config", Some(json!({ "mode": "localhost", "port": port }))).await.0, StatusCode::OK);
+    assert_eq!(d.req(Method::POST, "/api/server/start", None).await.0, StatusCode::OK);
+    let pub_base = format!("http://127.0.0.1:{port}");
+
+    // Đăng nhập Web Owner (chế độ Bearer chéo miền) & tạo Viewer
+    let http = reqwest::Client::new();
+    let login_res: Value = http
+        .post(format!("{pub_base}/api/auth/login"))
+        .header("origin", "http://localhost:5173")
+        .json(&json!({ "username": "admin", "password": "Strong-pass-2026", "authMode": "bearer" }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let bearer = format!("Bearer {}", login_res["sessionToken"].as_str().unwrap());
+
+    d.req(Method::POST, "/api/users", Some(json!({ "username": "viewer2", "password": "Viewer-pass-99", "role": "viewer" }))).await;
+    let mut viewer = Client::new(&pub_base);
+    viewer.req(Method::POST, "/api/auth/login", Some(json!({ "username": "viewer2", "password": "Viewer-pass-99" }))).await;
+
+    // 1. P7: Host Directory Browser & mkdir từ Web Owner; Viewer bị chặn 403
+    let dirs_res = http.get(format!("{pub_base}/api/fs/dirs")).header(header::AUTHORIZATION, &bearer).send().await.unwrap();
+    assert_eq!(dirs_res.status(), StatusCode::OK);
+    let dirs_json: Value = dirs_res.json().await.unwrap();
+    assert!(!dirs_json["roots"].as_array().unwrap().is_empty());
+
+    let browse_parent = tmp.path().join("host-browse");
+    std::fs::create_dir_all(&browse_parent).unwrap();
+    let mkdir_res = http
+        .post(format!("{pub_base}/api/fs/mkdir"))
+        .header(header::AUTHORIZATION, &bearer)
+        .json(&json!({ "parent": browse_parent.to_string_lossy(), "name": "NewSub", "confirm": true }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(mkdir_res.status(), StatusCode::OK);
+    assert!(browse_parent.join("NewSub").is_dir());
+
+    // Chặn traversal tên thư mục & đường dẫn tương đối
+    assert_eq!(
+        http.get(format!("{pub_base}/api/fs/dirs?path=relative/dir")).header(header::AUTHORIZATION, &bearer).send().await.unwrap().status(),
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(viewer.req(Method::GET, "/api/fs/dirs", None).await.0, StatusCode::FORBIDDEN);
+
+    // 2. P7: Streaming Mobile / App Photos Upload (ảnh PNG + từ chối .exe)
+    let png_bytes: &[u8] = &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4];
+    let up_res = http
+        .post(format!("{pub_base}/api/videos/upload?filename=iphone-photo.png"))
+        .header(header::AUTHORIZATION, &bearer)
+        .header(header::CONTENT_TYPE, "image/png")
+        .body(png_bytes.to_vec())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(up_res.status(), StatusCode::OK);
+    let up_json: Value = up_res.json().await.unwrap();
+    let upload_id = up_json["upload"]["id"].as_str().unwrap().to_string();
+    assert_eq!(up_json["upload"]["mediaKind"], "image");
+
+    let bad_ext = http
+        .post(format!("{pub_base}/api/videos/upload?filename=malware.exe"))
+        .header(header::AUTHORIZATION, &bearer)
+        .body(b"MZ".to_vec())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(bad_ext.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(viewer.req(Method::GET, "/api/uploads", None).await.0, StatusCode::FORBIDDEN);
+
+    // 3. P8: Import Skill từ tệp .zip (chặn Zip-Slip) qua Web Owner
+    let zip_bytes = build_test_zip(&[
+        ("news-skill/SKILL.md", b"---\nname: Tin Nhanh Studio\ndescription: Tao video tin nhanh\n---\n# Huong dan\n"),
+        ("../escaped.txt", b"hack"),
+    ]);
+    let arc_res = http
+        .post(format!("{pub_base}/api/skill-sources/archive?filename=news-pack.zip&confirm=true"))
+        .header(header::AUTHORIZATION, &bearer)
+        .body(zip_bytes)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(arc_res.status(), StatusCode::OK);
+    let arc_json: Value = arc_res.json().await.unwrap();
+    assert_eq!(arc_json["imported"].as_array().unwrap().len(), 1);
+    assert!(!arc_json["skipped"].as_array().unwrap().is_empty(), "Zip-Slip phải bị ghi nhận vào skipped");
+
+    let skills_list: Value = http.get(format!("{pub_base}/api/skills")).header(header::AUTHORIZATION, &bearer).send().await.unwrap().json().await.unwrap();
+    let imported_skill_id = skills_list[0]["id"].as_str().unwrap().to_string();
+
+    // 4. P9: AI Studio chạy đa AI song song (Antigravity + Claude + Codex) trên phần cứng máy chủ
+    #[cfg(windows)]
+    let fake_cli = {
+        let p = tmp.path().join("fake-studio-cli.cmd");
+        std::fs::write(&p, "@echo off\r\necho {\"type\":\"result\",\"result\":\"Ban nhap AI Studio thanh cong\"}\r\n").unwrap();
+        p
+    };
+    #[cfg(unix)]
+    let fake_cli = {
+        use std::os::unix::fs::PermissionsExt;
+        let p = tmp.path().join("fake-studio-cli.sh");
+        std::fs::write(&p, "#!/bin/sh\necho '{\"type\":\"result\",\"result\":\"Ban nhap AI Studio thanh cong\"}'\n").unwrap();
+        let mut perms = std::fs::metadata(&p).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&p, perms).unwrap();
+        p
+    };
+    state.studio.set_binary_override("claude", fake_cli.clone());
+    state.studio.set_binary_override("codex", fake_cli);
+
+    let studio_res = http
+        .post(format!("{pub_base}/api/studio/runs"))
+        .header(header::AUTHORIZATION, &bearer)
+        .json(&json!({
+            "mode": "multi_ai",
+            "prompt": "Dựng bản tin 30 giây từ ảnh đính kèm",
+            "skillId": imported_skill_id,
+            "sessions": [
+                { "provider": "claude", "model": "claude-sonnet-4-6", "effort": "high" },
+                { "provider": "codex", "model": "gpt-5.4", "effort": "medium" }
+            ],
+            "uploadIds": [upload_id],
+            "includeMemoryHint": true,
+            "confirm": true
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(studio_res.status(), StatusCode::OK);
+    let studio_json: Value = studio_res.json().await.unwrap();
+    let studio_job_id = studio_json["job"]["id"].as_str().unwrap().to_string();
+    assert_eq!(studio_json["sessions"].as_array().unwrap().len(), 2);
+
+    let mut studio_done = false;
+    for _ in 0..50 {
+        let r: Value =
+            http.get(format!("{pub_base}/api/studio/runs/{studio_job_id}")).header(header::AUTHORIZATION, &bearer).send().await.unwrap().json().await.unwrap();
+        if r["job"]["status"] == "succeeded" {
+            studio_done = true;
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    assert!(studio_done, "AI Studio đa phiên phải hoàn tất");
+    assert_eq!(viewer.req(Method::GET, "/api/studio/runs", None).await.0, StatusCode::FORBIDDEN);
+
+    // 5. P11: Shared Memory & Handoff 3 AI (lọc bí mật + chặn ngoài allowlist)
+    let mem_dir = tmp.path().join("mem-workspace");
+    std::fs::create_dir_all(&mem_dir).unwrap();
+    let (_, mut cur_settings, _) = d.req(Method::GET, "/api/settings", None).await;
+    cur_settings["workspaceMemoryDir"] = json!(mem_dir.to_string_lossy());
+    assert_eq!(d.req(Method::PUT, "/api/settings", Some(cur_settings)).await.0, StatusCode::OK);
+
+    assert_eq!(
+        http.put(format!("{pub_base}/api/memory/doc"))
+            .header(header::AUTHORIZATION, &bearer)
+            .json(&json!({ "id": "MEMORY.md", "content": "Ghi chú chung ghp_secretLeakToken123456", "confirm": true }))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::OK
+    );
+    let mem_doc: Value =
+        http.get(format!("{pub_base}/api/memory/doc?id=MEMORY.md")).header(header::AUTHORIZATION, &bearer).send().await.unwrap().json().await.unwrap();
+    assert!(!mem_doc["content"].as_str().unwrap().contains("ghp_secretLeak"));
+    assert!(mem_doc["content"].as_str().unwrap().contains("[REDACTED]"));
+
+    assert_eq!(
+        http.put(format!("{pub_base}/api/memory/doc"))
+            .header(header::AUTHORIZATION, &bearer)
+            .json(&json!({ "id": "../outside.md", "content": "x", "confirm": true }))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(viewer.req(Method::GET, "/api/memory", None).await.0, StatusCode::FORBIDDEN);
+
+    // 6. P10: Multi-Tunnel CRUD + Cloudflare Access JWT enforcement
+    let cf_tok = "z".repeat(80);
+    let t_res = http
+        .post(format!("{pub_base}/api/tunnels"))
+        .header(header::AUTHORIZATION, &bearer)
+        .json(&json!({
+            "name": "Zero Trust Web",
+            "kind": "token",
+            "targetUrl": format!("http://127.0.0.1:{port}"),
+            "hostname": "studio.example.com",
+            "token": cf_tok
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(t_res.status(), StatusCode::OK);
+    let t_body = t_res.text().await.unwrap();
+    assert!(!t_body.contains(&cf_tok), "không lộ token tunnel trong HTTP response");
+
+    // Bật Cloudflare Access trên listener Public
+    assert_eq!(
+        d.req(
+            Method::PUT,
+            "/api/server/config",
+            Some(json!({
+                "mode": "localhost",
+                "port": port,
+                "requireCfAccess": true,
+                "cfAccessTeamDomain": "myteam.cloudflareaccess.com",
+                "cfAccessAud": "aud-tag-1234567890"
+            }))
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+    assert_eq!(d.req(Method::POST, "/api/server/restart", None).await.0, StatusCode::OK);
+
+    // Không có Cf-Access-Jwt-Assertion → 403 Forbidden
+    assert_eq!(http.get(format!("{pub_base}/api/auth/me")).header(header::AUTHORIZATION, &bearer).send().await.unwrap().status(), StatusCode::FORBIDDEN);
+    // Sai AUD → 403 Forbidden
+    let bad_jwt = make_cf_jwt("https://myteam.cloudflareaccess.com", "wrong-aud", chrono::Utc::now().timestamp() + 600);
+    assert_eq!(
+        http.get(format!("{pub_base}/api/auth/me"))
+            .header(header::AUTHORIZATION, &bearer)
+            .header("Cf-Access-Jwt-Assertion", bad_jwt)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+    // Đúng ISS + AUD + chưa hết hạn → 200 OK
+    let good_jwt = make_cf_jwt("https://myteam.cloudflareaccess.com", "aud-tag-1234567890", chrono::Utc::now().timestamp() + 600);
+    assert_eq!(
+        http.get(format!("{pub_base}/api/auth/me"))
+            .header(header::AUTHORIZATION, &bearer)
+            .header("Cf-Access-Jwt-Assertion", good_jwt)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::OK
+    );
+
+    state.shutdown().await;
+}

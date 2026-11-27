@@ -3,11 +3,11 @@ import { Link } from 'react-router';
 import { Badge, Button, Card, Checkbox, ConfirmDialog, EmptyState, Select, Tabs, TextInput } from '@doto/ui';
 import { api } from '../api/client';
 import { useServerEvent } from '../api/events';
-import type { RenderRequest, VideoAsset, VideoKind } from '../api/types';
+import type { RenderRequest, UploadedMedia, VideoAsset, VideoKind } from '../api/types';
 import { AsyncView, HostOnly, PageHeader, useNotify } from '../components/common';
 import { VideoThumb, videoMeta } from '../components/video';
 import { useI18n } from '../i18n';
-import { formatDuration, secondsToMs } from '../lib/format';
+import { formatBytes, formatDuration, secondsToMs } from '../lib/format';
 import { upsertById } from '../lib/list';
 import { useApi } from '../lib/useApi';
 import { useCaps } from '../state/session';
@@ -74,6 +74,9 @@ export function VideosPage() {
           </>
         }
       />
+      <HostOnly>
+        <MobileUploadCard onUploaded={() => void videos.reload()} />
+      </HostOnly>
       <Tabs
         label={t('nav.videos')}
         value={kind}
@@ -331,6 +334,87 @@ function RenderPanel({ segments, setSegments, videos }: { segments: Segment[]; s
           {t('render.clear')}
         </Button>
       </div>
+    </Card>
+  );
+}
+
+function MobileUploadCard({ onUploaded }: { onUploaded: () => void }) {
+  const { t } = useI18n();
+  const notify = useNotify();
+  const uploads = useApi('media-uploads', () => api.uploads.list());
+  const [uploading, setUploading] = useState(false);
+
+  return (
+    <Card title={t('uploads.title')} description={t('uploads.desc')} className="mb-5">
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="ui-btn ui-btn--primary cursor-pointer" data-testid="mobile-upload-label">
+          {uploading ? t('common.loading') : `📱 ${t('uploads.pickFiles')}`}
+          <input
+            type="file"
+            accept="video/*,image/*"
+            multiple
+            className="sr-only"
+            disabled={uploading}
+            onChange={async (e) => {
+              const files = Array.from(e.target.files ?? []);
+              e.target.value = '';
+              if (!files.length) return;
+              setUploading(true);
+              try {
+                for (const f of files) {
+                  await api.uploads.upload(f);
+                }
+                notify.ok(t('uploads.uploadedCount', { n: files.length }));
+                await uploads.reload();
+                onUploaded();
+              } catch (ex) {
+                notify.fail(ex);
+              } finally {
+                setUploading(false);
+              }
+            }}
+          />
+        </label>
+      </div>
+      {(uploads.data?.length ?? 0) > 0 && (
+        <details className="mt-3">
+          <summary className="cursor-pointer text-xs font-semibold text-muted">
+            {t('uploads.recent', { n: uploads.data?.length ?? 0 })}
+          </summary>
+          <ul className="mt-2 divide-y divide-line text-xs">
+            {(uploads.data ?? []).slice(0, 12).map((u: UploadedMedia) => (
+              <li key={u.id} className="flex flex-wrap items-center justify-between gap-2 py-1.5">
+                <span>
+                  {u.mediaKind === 'video' ? '🎬' : '🖼'} <strong>{u.originalName}</strong> · {formatBytes(u.sizeBytes)}
+                  {u.videoId && (
+                    <>
+                      {' · '}
+                      <Link to={`/gallery/${u.videoId}`} className="text-primary underline">
+                        {t('nav.gallery')}
+                      </Link>
+                    </>
+                  )}
+                </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={async () => {
+                    try {
+                      await api.uploads.remove(u.id);
+                      await uploads.reload();
+                      onUploaded();
+                    } catch (ex) {
+                      notify.fail(ex);
+                    }
+                  }}
+                >
+                  {t('common.delete')}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </Card>
   );
 }

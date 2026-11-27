@@ -7,7 +7,7 @@ export type EventType = ServerEvent['type'];
 type EventOf<T extends EventType> = Extract<ServerEvent, { type: T }>;
 type Listener = (e: ServerEvent) => void;
 
-export const EVENT_TYPES: EventType[] = ['metrics', 'job', 'video', 'server', 'tunnel', 'tool', 'skills'];
+export const EVENT_TYPES: EventType[] = ['metrics', 'job', 'video', 'server', 'tunnel', 'tool', 'skills', 'studio'];
 
 /**
  * Parse one SSE message. Accepts either `data: {"type":"job","data":{…}}` on the

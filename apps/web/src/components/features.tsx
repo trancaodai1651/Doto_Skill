@@ -18,6 +18,7 @@ import { formatBytes, formatDate, formatMb } from '../lib/format';
 import { useApi } from '../lib/useApi';
 import type { ApiState } from '../lib/useApi';
 import { AsyncView, Code, ExternalLink, HostOnly, KeyValue, useNotify } from './common';
+import { BrowseFolderButton } from './FolderPicker';
 
 // ---------------------------------------------------------------------------
 // AI CLI install (never auto-run: always a ConfirmDialog with the exact command)
@@ -122,16 +123,20 @@ export function AddFolderSourceForm({ onAdded }: { onAdded?: (s: SkillSource) =>
   return (
     <HostOnly>
       <form onSubmit={submit} className="flex flex-col gap-2" aria-label={t('sources.addFolder')}>
-        <TextInput
-          label={t('sources.folderPath')}
-          placeholder={t('sources.folderPlaceholder')}
-          value={path}
-          onChange={(e) => setPath(e.target.value)}
-          error={err}
-          autoCapitalize="none"
-          autoCorrect="off"
-          spellCheck={false}
-        />
+        <div className="flex flex-wrap items-end gap-2">
+          <TextInput
+            fieldClassName="flex-1"
+            label={t('sources.folderPath')}
+            placeholder={t('sources.folderPlaceholder')}
+            value={path}
+            onChange={(e) => setPath(e.target.value)}
+            error={err}
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+          />
+          <BrowseFolderButton currentPath={path} onSelect={(p) => setPath(p)} />
+        </div>
         <HostDiskHints onSelect={(m) => setPath((cur) => cur || m)} />
         <Checkbox label={t('sources.watch')} checked={watch} onChange={(e) => setWatch(e.target.checked)} />
         <div>

@@ -282,6 +282,7 @@ async fn load_session_by_id(st: &AppState, session_id: &str) -> anyhow::Result<O
 fn ticket_allowed_path(path: &str) -> bool {
     matches!(path, "/api/events" | "/api/server/qr")
         || (path.starts_with("/api/videos/") && (path.ends_with("/stream") || path.ends_with("/download") || path.ends_with("/thumbnail")))
+        || (path.starts_with("/api/uploads/") && path.ends_with("/preview"))
 }
 
 fn query_ticket(uri: &axum::http::Uri) -> Option<String> {

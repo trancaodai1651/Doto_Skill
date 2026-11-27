@@ -188,9 +188,44 @@ impl MediaService {
         self.wake.notify_one();
     }
 
-    async fn output_dir(&self) -> PathBuf {
+    pub async fn output_dir(&self) -> PathBuf {
         let app: settings::AppSettings = settings::get(&self.db, settings::KEY_APP).await.unwrap_or_default();
         app.output_dir.map(PathBuf::from).unwrap_or_else(|| self.paths.default_exports_dir())
+    }
+
+    /// Đưa một tệp video vừa tải lên từ thiết bị di động / trình duyệt vào `video_assets` (`source`).
+    /// Nếu máy chủ chưa cài FFmpeg/ffprobe thì trả `Ok(None)` (tệp vẫn được lưu trong `uploaded_media`).
+    pub async fn index_uploaded_source(&self, f: &Path, title: Option<String>) -> Result<Option<VideoAsset>, MediaError> {
+        let Some(info) = self.ffmpeg.read().unwrap().clone() else {
+            return Ok(None);
+        };
+        let meta = tokio::fs::metadata(f).await.map_err(|e| MediaError::Validation(format!("không đọc được tệp vừa tải lên: {e}")))?;
+        let mtime = meta.modified().ok().map(|t| chrono::DateTime::<chrono::Utc>::from(t).to_rfc3339());
+        let asset = self.index_file(&info, f, "source", meta.len() as i64, mtime, "private", title, None).await?;
+        Ok(Some(asset))
+    }
+
+    /// Quét thư mục con của một phiên AI Studio sau khi hoàn tất để tự lập chỉ mục các file video mới xuất (`export`).
+    pub async fn scan_directory_as_exports(&self, dir: &Path, visibility: &str, job_id: Option<String>) -> Result<Vec<VideoAsset>, MediaError> {
+        let Some(info) = self.ffmpeg.read().unwrap().clone() else {
+            return Ok(vec![]);
+        };
+        if !dir.is_dir() {
+            return Ok(vec![]);
+        }
+        let root = dir.to_path_buf();
+        let files = tokio::task::spawn_blocking(move || library::discover_files(&root, 4)).await.map_err(anyhow::Error::from)?;
+        let vis = if visibility == "viewers" { "viewers" } else { "private" };
+        let mut out = vec![];
+        for f in files {
+            if let Ok(meta) = tokio::fs::metadata(&f).await {
+                let mtime = meta.modified().ok().map(|t| chrono::DateTime::<chrono::Utc>::from(t).to_rfc3339());
+                if let Ok(asset) = self.index_file(&info, &f, "export", meta.len() as i64, mtime, vis, None, job_id.clone()).await {
+                    out.push(asset);
+                }
+            }
+        }
+        Ok(out)
     }
 
     // ---------------- Thư viện ----------------

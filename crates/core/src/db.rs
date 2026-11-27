@@ -5,7 +5,7 @@ use rusqlite::Connection;
 
 /// Danh sách migration theo thứ tự. Phiên bản = chỉ số + 1, lưu ở `PRAGMA user_version`.
 /// Không bao giờ sửa migration đã phát hành — chỉ thêm migration mới.
-const MIGRATIONS: &[&str] = &[include_str!("../migrations/0001_init.sql")];
+const MIGRATIONS: &[&str] = &[include_str!("../migrations/0001_init.sql"), include_str!("../migrations/0002_v02_studio.sql")];
 
 pub const SCHEMA_VERSION: i64 = MIGRATIONS.len() as i64;
 

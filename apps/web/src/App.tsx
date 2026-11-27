@@ -10,10 +10,12 @@ import { LoginPage } from './pages/Login';
 import { SetupPage } from './pages/Setup';
 import { OnboardingPage } from './pages/Onboarding';
 import { DashboardPage } from './pages/Dashboard';
+import { StudioPage } from './pages/Studio';
 import { SkillsPage } from './pages/Skills';
 import { ToolsPage } from './pages/Tools';
 import { VideosPage } from './pages/Videos';
 import { JobsPage } from './pages/Jobs';
+import { MemoryPage } from './pages/Memory';
 import { ServerPage } from './pages/Server';
 import { DevicesPage } from './pages/Devices';
 import { PerformancePage } from './pages/Performance';
@@ -117,10 +119,12 @@ export function App() {
         <Route path="/onboarding" element={<OnboardingPage />} />
         <Route element={<AdminLayout />}>
           <Route index element={<DashboardPage />} />
+          <Route path="/studio" element={<StudioPage />} />
           <Route path="/skills" element={<SkillsPage />} />
           <Route path="/tools" element={<ToolsPage />} />
           <Route path="/videos" element={<VideosPage />} />
           <Route path="/jobs" element={<JobsPage />} />
+          <Route path="/memory" element={<MemoryPage />} />
           <Route path="/server" element={<ServerPage />} />
           <Route path="/devices" element={<DevicesPage />} />
           <Route path="/performance" element={<PerformancePage />} />

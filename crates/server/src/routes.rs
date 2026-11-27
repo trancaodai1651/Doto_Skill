@@ -682,6 +682,8 @@ async fn settings_json(st: &AppState) -> ApiResult<Value> {
     let s: settings::AppSettings = settings::get(&st.db, settings::KEY_APP).await?;
     let mut v = json!(s);
     v["dataDir"] = json!(st.paths.data_dir.to_string_lossy());
+    v["defaultUploadsDir"] = json!(st.paths.default_uploads_dir().to_string_lossy());
+    v["defaultCustomSkillsDir"] = json!(st.paths.default_custom_skills_dir().to_string_lossy());
     Ok(v)
 }
 
@@ -1451,8 +1453,16 @@ async fn create_render(State(st): St, a: Auth, Json(b): Json<doto_media::RenderR
 async fn cancel_job(State(st): St, a: Auth, Path(id): Path<String>) -> ApiResult<Json<Value>> {
     a.require_owner()?;
     let j = jobs::get(&st.db, &id).await?.ok_or_else(|| ApiError::not_found("không tìm thấy job"))?;
+    if j.kind == "studio" {
+        let n = st.studio.cancel_job(&id).await?;
+        if n == 0 && !matches!(j.status.as_str(), "running" | "queued") {
+            return Err(ApiError::conflict("job đã kết thúc"));
+        }
+        audit_ev(&st, &a, "job.cancel", Some(id), Some(json!({ "kind": "studio" }))).await;
+        return Ok(ok());
+    }
     if j.kind != "render" {
-        return Err(ApiError::conflict("chỉ huỷ được job render"));
+        return Err(ApiError::conflict("chỉ huỷ được job render hoặc AI Studio"));
     }
     if !st.media.cancel(&id).await? {
         return Err(ApiError::conflict("job đã kết thúc"));

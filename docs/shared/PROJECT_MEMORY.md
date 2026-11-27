@@ -5,16 +5,16 @@
 ## 1. Mục tiêu sản phẩm
 Ứng dụng desktop **Windows + macOS** (Tauri v2) đồng thời là **máy chủ web cục bộ** để thiết bị khác xem/tải thư viện video qua trình duyệt. Tích hợp: quản lý nhiều nguồn AI Skills (thư mục + GitHub), cài đặt có xác nhận 4 công cụ (Antigravity `agy`, Codex `codex`, Claude Code `claude`, `cloudflared`), nhận diện phần cứng, 3 profile tài nguyên, pipeline render video FFmpeg thật, bộ nhớ chung cho 3 agent.
 
-## 2. Kiến trúc hiện tại (v0.1.0)
+## 2. Kiến trúc hiện tại (v0.2.0)
 ```
-apps/desktop (Tauri v2, tray, autostart) ──in-process──► crates/server (Axum)
+apps/desktop (Tauri v2, tray, autostart) ──in-process──► crates/server (Axum: routes + v02 + memory + Cloudflare Access)
                                                          ├─ listener Control 127.0.0.1:<ngẫu nhiên>  → cửa sổ desktop
                                                          └─ listener Public  Off | 127.0.0.1 | LAN(IP/0.0.0.0):4380 → bản Web, cloudflared
-crates/server ─► crates/core (SQLite WAL + migrations, backup/restore, settings, audit, jobs, EventBus, OS vault)
+crates/server ─► crates/core (SQLite WAL v2 + migrations, backup/restore, settings, audit, jobs, EventBus, OS vault)
               ─► crates/system (HardwareProbe, ResourceManager + admission)
-              ─► crates/media (FFmpeg discover/verify, encoder probe & 720p benchmark, library, render queue)
-              ─► crates/skills (scanner, GitHub client, SkillService, provider mapping)
-              ─► crates/integrations (CliProvider ×4, ToolManager, cloudflared installer, TunnelManager)
+              ─► crates/media (FFmpeg discover/verify, encoder probe & 720p benchmark, library, mobile upload indexing, render queue)
+              ─► crates/skills (scanner, GitHub client, pure-Rust .zip/.tar.gz & folder upload importer, SkillService, provider mapping)
+              ─► crates/integrations (CliProvider ×4, ToolManager, StudioRunner đơn/đa phiên song song, Multi-Tunnel CRUD Manager)
 apps/web + packages/ui (React 19, TS strict, Vite, Tailwind 4) → build ra apps/web/dist, phục vụ tĩnh hoặc chạy độc lập kết nối tới URL máy chủ bản App
 ```
 - **Bản App & Bản Web đồng nhất 100% tính năng (ADR-013):** Owner đã xác thực trên bản Web (cùng miền hoặc kết nối từ xa tới địa chỉ máy chủ bản App) có đầy đủ mọi tính năng quản trị như trên cửa sổ Desktop, sử dụng trực tiếp phần cứng CPU/RAM/GPU của máy chủ bản App thông qua API allowlist an toàn. Browser không bao giờ gửi lệnh shell tuỳ ý hay đường dẫn thực thi giả (`ffmpegPath`/`ffprobePath` bắt buộc xác minh `-version` thật trước khi lưu). Chỉ `/api/auth/desktop` dành riêng cho token một lần của cửa sổ Tauri, và `/api/auth/setup` chỉ cho phép từ loopback khi chưa đặt mật khẩu Owner.
@@ -25,7 +25,7 @@ apps/web + packages/ui (React 19, TS strict, Vite, Tailwind 4) → build ra apps
 - **Skills:** 0 nguồn/0 skill ban đầu. Nguồn thư mục (watcher debounce 1.5s, gợi ý ổ đĩa máy chủ) và GitHub (resolve ref→SHA, tải tarball read-only, giải nén an toàn: chặn traversal/symlink/hardlink, giới hạn 200 MB nén/500 MB giải nén/50k entry; check-update hiển thị diff file trước khi apply; pin commit). Cài sang provider = **sao chép** kèm marker `.doto-skill.json`, không ghi đè thư mục người dùng, skill có script cần xác nhận riêng.
 
 ## 3. Quyết định đã chốt
-Xem `docs/shared/DECISIONS.md` (ADR-001…ADR-013).
+Xem `docs/shared/DECISIONS.md` (ADR-001…ADR-014).
 
 ## 4. Đường dẫn provider (tài liệu chính thức, kiểm tra 2026-11-26)
 | Provider | Skills cấp user | Kiểm tra đăng nhập |
@@ -50,9 +50,9 @@ Chi tiết + nguồn: `docs/INTEGRATIONS.md`.
 ## 6. Giả định & hạn chế hiện tại
 - GitHub OAuth Device Flow cần `DOTO_GITHUB_CLIENT_ID` của một OAuth App do chủ sở hữu tạo; khi chưa có, dùng tuỳ chọn "Dùng gh CLI" (đọc `gh auth token` với xác nhận) — đã hoạt động.
 - Chưa ký số / notarize installer (chưa có chứng chỉ Apple Developer / Windows code signing).
-- Chưa có Cloudflare Access tự động — chỉ hướng dẫn (khuyến nghị bật khi xuất bản Internet).
-- Chưa có tính năng AI auto-edit; kiến trúc job/skill cho phép mở rộng sau.
-- Thử nghiệm "thiết bị khác cùng LAN" mới kiểm chứng bằng trình duyệt trên cùng host qua IP Tailscale; chưa thử trên điện thoại vật lý.
+- Kiểm tra JWT `Cf-Access-Jwt-Assertion` của Cloudflare Access và CRUD đa tunnel đã được tích hợp; cần tài khoản Cloudflare Zero Trust của chủ sở hữu để kiểm chứng ngoài Internet thực tế.
+- AI Studio điều phối trực tiếp CLI `agy` / `claude` / `codex` (cần người dùng tự cài và đăng nhập từng CLI theo hướng dẫn chính thức).
+- Thử nghiệm thiết bị di động đã có E2E tự động trên `doto-server` thật; khuyến nghị kiểm thử thêm trên iPhone/Android vật lý cùng Wi-Fi.
 
 ## 7. Thiết lập máy dev
 Node ≥ 20.19 (đã dùng 26), Rust stable (1.99), ffmpeg/ffprobe trên PATH, Windows: WebView2 + MSVC build tools; macOS: Xcode CLT.
@@ -64,30 +64,30 @@ npm run desktop:dev
 ```
 
 <!-- AUTO:START (scripts/update-handoff.mjs — không sửa tay khối này) -->
-**Cập nhật tự động:** 2026-11-26T09:27:10.962Z bởi `antigravity`
-- Branch: `main` · HEAD: `0592add8c0983466fc6f4000efe0e77481cff7c7`
+**Cập nhật tự động:** 2026-11-27T00:40:56.840Z bởi `antigravity`
+- Branch: `feat/v0.2-studio-p7-p13` · HEAD: `7e05d5e395ae5b92be3def9d424d28ab2d0cbbd5`
 - Working tree: sạch
-- Tóm tắt phiên: Hoàn tất P0–P6 & đồng bộ 100% tính năng bản App ↔ bản Web (Owner kết nối phần cứng server bản App); merge PR #1 vào main và phát hành thành công GitHub Release v0.1.0 (Win NSIS/MSI + macOS universal DMG/app.zip + SHA256SUMS)
-- NEXT_ACTION: Kiểm thử thực tế trên thiết bị di động cùng Wi-Fi & máy Mac vật lý; cấu hình DOTO_GITHUB_CLIENT_ID (Device Flow), Cloudflare Named Tunnel + Access và chứng chỉ ký mã khi chủ repo cung cấp
+- Tóm tắt phiên: Triển khai trọn bộ P7–P13 lên v0.2.0 (AI Studio đa phiên Antigravity/Claude/Codex, Mobile Upload & App Photos, Import Skill .zip/folder, CRUD đa Tunnel + Cloudflare Access JWT, Trung tâm Memory/Handoff 3 AI, E2E doto-server thật)
+- NEXT_ACTION: Chờ CI đa nền tảng trên PR v0.2.0 xanh, merge vào main và phát hành GitHub Release v0.2.0
 
 **Commit gần nhất:**
+- 7e05d5e feat(v0.2): triển khai trọn bộ P7–P13 (AI Studio đa phiên, Mobile Upload, Import .zip, CRUD đa Tunnel & Cloudflare Access, Memory 3 AI, E2E thật) (2026-11-27)
+- 23f1785 docs(handoff): đồng bộ trạng thái hoàn tất phát hành v0.1.0 cho 3 AI (2026-11-26)
 - 0592add docs(release): ghi nhận kết quả CI/Release v0.1.0 và checksum installers (2026-11-26)
 - 12084d4 Merge pull request #1 from trancaodai1651/feat/initial-platform (2026-11-26)
 - 66c2ecb docs(handoff): đồng bộ bộ nhớ chung và 3 file bàn giao AI (antigravity) (2026-11-26)
-- 0d13454 feat(parity): đồng bộ 100% tính năng App & Web qua server phần cứng máy chủ, CORS Bearer, backup/restore & benchmark (2026-11-26)
-- 057c032 feat(web): UI link chia sẻ video có hạn (tạo có xác nhận, sao chép, thu hồi); cập nhật bộ nhớ chung + handoff (2026-11-26)
 
 **Lần chạy test gần nhất:**
-Máy: Windows 11 Pro (x86_64, i7-6800K, 32 GB, RTX 2070 SUPER) · Rust 1.99.1 · Node 26.13 · FFmpeg 9.0.2 (gyan full) · 2026-11-26 · agent: antigravity
+Máy: Windows 11 Pro (x86_64, i7-6800K, 32 GB, RTX 2070 SUPER) · Rust 1.99.1 · Node 26.13 · FFmpeg 9.0.2 (gyan full) · 2026-11-27 · agent: antigravity
 
 | Lệnh / Workflow | Kết quả |
 | --- | --- |
-| `cargo test --workspace` (DOTO_SECRETS=memory, DOTO_REQUIRE_FFMPEG=1) | ✅ 101/101 test xanh: core 13 · system 8 · media 13 + render_e2e 3 (FFmpeg thật) · skills 18 + service 2 · integrations 12 · server 10 + api_security 2 (kiểm chứng đồng bộ Owner App↔Web, CORS Bearer + media ticket, xác minh binary FFmpeg, sao lưu/khôi phục SQLite, chặn Viewer 403/404) |
+| `cargo test --workspace` (DOTO_SECRETS=memory, DOTO_REQUIRE_FFMPEG=1) | ✅ 115/115 test xanh: core 13 · system 8 · media 13 + render_e2e 3 (FFmpeg thật) · skills 25 + service 2 · integrations 17 (`StudioRunner` song song + CRUD đa tunnel) · server 11 + api_security 3 (kiểm chứng đồng bộ Owner App↔Web, duyệt thư mục host, mobile upload, `.zip` Zip-Slip, AI Studio đa phiên, CRUD đa tunnel + Cloudflare Access JWT, Memory lọc bí mật, chặn Viewer 403/404) |
 | `cargo clippy --workspace --all-targets -- -D warnings` + `cargo fmt --all --check` | ✅ sạch (0 cảnh báo) |
-| `npm run typecheck/lint/test -w apps/web` | ✅ 33/33 unit test (Vitest) |
-| `npm run e2e -w apps/web` (Playwright Chromium) | ✅ 4/4 (`onboarding.spec.ts`, `skills.spec.ts`, `gallery.spec.ts`, `web-parity.spec.ts`) |
-| `node scripts/secrets-scan.mjs` + `node scripts/license-check.mjs` | ✅ 216 file sạch bí mật · 639 phụ thuộc không copyleft bắt buộc |
-| `npm run desktop:build -- --bundles nsis,msi` (Windows x64, local) | ✅ `Doto Skill_0.1.0_x64-setup.exe` 5.83 MiB (`dc4a1e38…74b83`) · `Doto Skill_0.1.0_x64_en-US.msi` 8.47 MiB (`42f0cb39…16bbe`) |
-| GitHub Actions CI (`45787940484`, PR #1) | ✅ Ubuntu Web/E2E (1m1s) · Secrets & licenses (33s) · macOS Rust+FFmpeg (1m21s) · Windows Rust+FFmpeg (2m48s) |
-| GitHub Actions Release `v0.1.0` (`45788563182`, tag `12084d4677`) | ✅ CI xanh · `windows-x64` (7m2s) · `macos-universal` `lipo` x86_64+arm64 (11m19s) · xuất bản https://github.com/trancaodai1651/Doto_Skill/releases/tag/v0.1.0 (`Doto.Skill_0.1.0_x64-setup.exe` `c51500db…46af`, `Doto.Skill_0.1.0_x64_en-US.msi` `a53ab770…658d`, `Doto.Skill_0.1.0_universal.dmg` `bb1f8a6f…fa9b`, `Doto-Skill_universal.app.zip` `e37f9ee4…85fb`, `SHA256SUMS.txt`, `THIRD_PARTY_LICENSES.tsv`) |
+| `npm run typecheck/lint/test -w apps/web` | ✅ 33/33 unit test (Vitest, kiểm tra đồng bộ từ điển VI/EN) |
+| `npm run e2e -w apps/web` (Playwright Chromium, mock API) | ✅ 5/5 (`onboarding.spec.ts`, `skills.spec.ts`, `gallery.spec.ts`, `web-parity.spec.ts`, `studio-v02.spec.ts`) |
+| `npm run e2e:real` (Playwright chạy trực tiếp trên binary `doto-server` thật) | ✅ 1/1 (`real-server.spec.ts`: desktop one-time token → setup → onboarding 8 bước → bật Public server → import `.zip` skill → ghi bàn giao Memory → tải ảnh mobile → ghép nối Viewer RBAC) |
+| `node scripts/secrets-scan.mjs` + `node scripts/license-check.mjs` | ✅ 228 file sạch bí mật · 639 phụ thuộc không copyleft bắt buộc |
+| `npm run desktop:build -- --bundles nsis,msi` (Windows x64, local `0.2.0`) | ✅ `Doto Skill_0.2.0_x64-setup.exe` 6.27 MiB (`ffda71bd…96b1f`) · `Doto Skill_0.2.0_x64_en-US.msi` 9.10 MiB (`e49b052c…715b5`) |
+| GitHub Actions Release `v0.1.0` (`45788563182`, mốc trước) | ✅ https://github.com/trancaodai1651/Doto_Skill/releases/tag/v0.1.0 |
 <!-- AUTO:END -->

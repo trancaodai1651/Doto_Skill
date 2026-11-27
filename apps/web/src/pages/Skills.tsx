@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Badge, Button, Card, ConfirmDialog, Drawer, EmptyState, Modal, Select, Tabs, TextInput, StatusPill } from '@doto/ui';
+import { Badge, Button, Card, Checkbox, ConfirmDialog, Drawer, EmptyState, Modal, Select, Tabs, TextInput, StatusPill } from '@doto/ui';
 import { api, errorMessage } from '../api/client';
 import { useServerEvent } from '../api/events';
 import type { DeviceFlowStart, GithubStatus, ProviderId, Skill, SkillSource, UpdateCheck } from '../api/types';
@@ -325,8 +325,150 @@ function SourcesTab({ state, onChanged }: { state: ApiState<SkillSource[]>; onCh
         <Card title={t('sources.addGithub')}>
           <AddGithubSourceForm onAdded={onChanged} />
         </Card>
+        <Card title={t('sources.importArchive')} description={t('sources.importArchiveDesc')}>
+          <ImportArchiveForm onImported={onChanged} />
+        </Card>
+        <Card title={t('sources.uploadFolder')} description={t('sources.uploadFolderDesc')}>
+          <UploadFolderForm onImported={onChanged} />
+        </Card>
       </div>
     </div>
+  );
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+function ImportArchiveForm({ onImported }: { onImported: () => void }) {
+  const t = useT();
+  const notify = useNotify();
+  const [file, setFile] = useState<File | null>(null);
+  const [overwrite, setOverwrite] = useState(false);
+  const [autoMd, setAutoMd] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+
+  return (
+    <HostOnly>
+      <div className="flex flex-col gap-2.5 text-sm">
+        <label className="ui-btn ui-btn--secondary w-fit cursor-pointer">
+          📦 {file ? file.name : t('sources.pickArchive')}
+          <input
+            type="file"
+            accept=".zip,.tar.gz,.tgz,.tar,.7z,.rar"
+            className="sr-only"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          />
+        </label>
+        <Checkbox label={t('sources.overwrite')} checked={overwrite} onChange={(e) => setOverwrite(e.target.checked)} />
+        <Checkbox label={t('sources.autoMd')} checked={autoMd} onChange={(e) => setAutoMd(e.target.checked)} />
+        <div>
+          <Button variant="primary" disabled={!file} onClick={() => setConfirm(true)} data-testid="import-archive-btn">
+            {t('sources.importArchive')}
+          </Button>
+        </div>
+      </div>
+      <ConfirmDialog
+        open={confirm}
+        title={t('sources.importConfirmTitle')}
+        confirmLabel={t('skills.install')}
+        cancelLabel={t('common.cancel')}
+        onCancel={() => setConfirm(false)}
+        onConfirm={async () => {
+          if (!file) return;
+          const r = await api.skills.importArchive(file, { overwrite, autoMd });
+          setConfirm(false);
+          setFile(null);
+          notify.ok(t('sources.importedOk', { n: r.imported.length }), r.skipped.join('; ') || undefined);
+          onImported();
+        }}
+      >
+        <p>{t('sources.importConfirmBody')}</p>
+        {file && (
+          <p className="mt-2">
+            <Code>{file.name}</Code> ({formatBytes(file.size)})
+          </p>
+        )}
+      </ConfirmDialog>
+    </HostOnly>
+  );
+}
+
+function UploadFolderForm({ onImported }: { onImported: () => void }) {
+  const t = useT();
+  const notify = useNotify();
+  const dirRef = useRef<HTMLInputElement | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [overwrite, setOverwrite] = useState(false);
+  const [autoMd, setAutoMd] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+
+  useEffect(() => {
+    if (dirRef.current) {
+      dirRef.current.setAttribute('webkitdirectory', '');
+      dirRef.current.setAttribute('directory', '');
+    }
+  }, []);
+
+  const folderName = useMemo(() => {
+    const first = files[0] as (File & { webkitRelativePath?: string }) | undefined;
+    const rel = first?.webkitRelativePath ?? '';
+    return rel.split('/')[0] || 'uploaded-skill';
+  }, [files]);
+
+  return (
+    <HostOnly>
+      <div className="flex flex-col gap-2.5 text-sm">
+        <label className="ui-btn ui-btn--secondary w-fit cursor-pointer">
+          📂 {files.length ? `${folderName} (${files.length})` : t('sources.pickFolder')}
+          <input
+            ref={dirRef}
+            type="file"
+            multiple
+            className="sr-only"
+            onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+          />
+        </label>
+        <Checkbox label={t('sources.overwrite')} checked={overwrite} onChange={(e) => setOverwrite(e.target.checked)} />
+        <Checkbox label={t('sources.autoMd')} checked={autoMd} onChange={(e) => setAutoMd(e.target.checked)} />
+        <div>
+          <Button variant="primary" disabled={files.length === 0} onClick={() => setConfirm(true)}>
+            {t('sources.uploadFolder')}
+          </Button>
+        </div>
+      </div>
+      <ConfirmDialog
+        open={confirm}
+        title={t('sources.importConfirmTitle')}
+        confirmLabel={t('sources.uploadFolder')}
+        cancelLabel={t('common.cancel')}
+        onCancel={() => setConfirm(false)}
+        onConfirm={async () => {
+          const encoded = await Promise.all(
+            files.map(async (f) => {
+              const rel = (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name;
+              const buf = new Uint8Array(await f.arrayBuffer());
+              return { path: rel, contentBase64: bytesToBase64(buf) };
+            }),
+          );
+          const r = await api.skills.uploadFolder({ folderName, files: encoded, overwrite, autoMd });
+          setConfirm(false);
+          setFiles([]);
+          notify.ok(t('sources.importedOk', { n: r.imported.length }), r.skipped.join('; ') || undefined);
+          onImported();
+        }}
+      >
+        <p>{t('sources.importConfirmBody')}</p>
+        <p className="mt-2">
+          <Code>{folderName}</Code> ({files.length} files)
+        </p>
+      </ConfirmDialog>
+    </HostOnly>
   );
 }
 

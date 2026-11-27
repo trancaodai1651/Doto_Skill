@@ -1,5 +1,5 @@
 // Hợp đồng API giữa crates/server (Rust, serde camelCase) và apps/web.
-// Mọi thay đổi ở đây PHẢI đồng bộ với crates/server/src/dto.rs và docs/API.md.
+// Mọi thay đổi ở đây PHẢI đồng bộ với crates/server và docs/API.md.
 
 export type Role = 'owner' | 'viewer';
 
@@ -136,14 +136,38 @@ export interface AppSettings {
   theme: 'system' | 'light' | 'dark';
   videoSourceDirs: string[];
   outputDir: string | null;
+  mediaUploadDir?: string | null;
+  customSkillDir?: string | null;
+  workspaceMemoryDir?: string | null;
   ffmpegPath: string | null;
   ffprobePath: string | null;
   dataDir: string; // chỉ đọc
+  defaultUploadsDir?: string;
+  defaultCustomSkillsDir?: string;
   launchAtLogin: boolean;
   runInBackground: boolean;
 }
 
-// ---------- Skills ----------
+// ---------- Host Directory Browser & Mobile Uploads (P7) ----------
+export interface HostDirsResponse {
+  current: string | null;
+  parent: string | null;
+  roots: { label: string; path: string }[];
+  entries: { name: string; path: string }[];
+}
+
+export interface UploadedMedia {
+  id: string;
+  originalName: string;
+  safeName: string;
+  mimeType: string;
+  mediaKind: 'video' | 'image';
+  sizeBytes: number;
+  videoId: string | null;
+  createdAt: string;
+}
+
+// ---------- Skills & Archive Import (P8) ----------
 export type SkillSourceKind = 'folder' | 'github';
 
 export interface SkillSource {
@@ -186,6 +210,22 @@ export interface SkillDetail extends Skill {
   metadata: Record<string, unknown>;
 }
 
+export interface ImportedSkillSummary {
+  slug: string;
+  name: string;
+  files: number;
+  hasScripts: boolean;
+  generatedSkillMd: boolean;
+  replaced: boolean;
+}
+
+export interface SkillImportReport {
+  imported: ImportedSkillSummary[];
+  skipped: string[];
+  sourceId: string | null;
+  targetDir: string;
+}
+
 export interface UpdateCheck {
   currentSha: string | null;
   latestSha: string;
@@ -212,6 +252,7 @@ export interface DeviceFlowStart {
 
 // ---------- AI CLI tools ----------
 export type ProviderId = 'antigravity' | 'codex' | 'claude' | 'cloudflared';
+export type AiProviderId = 'antigravity' | 'claude' | 'codex';
 
 export interface InstallMethod {
   id: string;
@@ -238,7 +279,80 @@ export interface ToolStatus {
   lastCheckedAt: string | null;
 }
 
-// ---------- Web server / network ----------
+// ---------- AI Studio (P9) ----------
+export interface StudioModelInfo {
+  id: string;
+  name: string;
+  badge: string | null;
+  defaultEffort: string;
+  efforts: string[];
+  slugPattern: string | null;
+  desc: string;
+}
+
+export interface StudioProviderCatalog {
+  id: AiProviderId;
+  name: string;
+  vendor: string;
+  installed: boolean;
+  binaryPath: string | null;
+  version: string | null;
+  skillPrefix: string;
+  models: StudioModelInfo[];
+}
+
+export type StudioRunMode = 'single' | 'multi_same_ai' | 'multi_ai' | 'custom_batch';
+
+export interface StudioSessionSpec {
+  provider: AiProviderId;
+  model: string;
+  effort: string;
+  label?: string;
+}
+
+export interface StudioRunRequest {
+  mode: StudioRunMode;
+  prompt: string;
+  title?: string;
+  skillId?: string | null;
+  provider?: AiProviderId;
+  model?: string;
+  effort?: string;
+  count?: number;
+  sessions?: StudioSessionSpec[];
+  uploadIds?: string[];
+  includeMemoryHint?: boolean;
+  visibility?: 'private' | 'viewers';
+  confirm: boolean;
+}
+
+export interface StudioSession {
+  id: string;
+  jobId: string;
+  sessionIndex: number;
+  label: string;
+  provider: AiProviderId;
+  model: string;
+  effort: string;
+  skillId: string | null;
+  status: JobStatus;
+  commandPreview: string;
+  outputSubdir: string;
+  resultText: string;
+  log: string[];
+  error: string | null;
+  exitCode: number | null;
+  outputVideoIds: string[];
+  startedAt: string | null;
+  finishedAt: string | null;
+}
+
+export interface StudioRunDetail {
+  job: Job;
+  sessions: StudioSession[];
+}
+
+// ---------- Web server / network / Multi-Tunnel (P10) ----------
 export type ServerMode = 'off' | 'localhost' | 'lan';
 
 export interface ServerStatus {
@@ -260,9 +374,14 @@ export interface ServerConfig {
   lanInterfaceIp: string | null; // null = 0.0.0.0
   ipAllowlist: string[]; // CIDR, rỗng = cho phép tất cả
   publicBaseUrl: string | null; // vd https://video.example.com khi dùng tunnel
+  maxStreamKbps?: number;
+  requireCfAccess?: boolean;
+  cfAccessTeamDomain?: string | null;
+  cfAccessAud?: string | null;
 }
 
 export type TunnelMode = 'quick' | 'named';
+export type ManagedTunnelKind = 'quick' | 'token' | 'named';
 
 export interface TunnelStatus {
   cloudflaredFound: boolean;
@@ -283,6 +402,88 @@ export interface TunnelConfig {
   hostname: string | null; // hostname đã cấu hình trên Cloudflare dashboard (named)
   autoStart: boolean;
   token?: string; // chỉ gửi lên khi đặt/đổi; server lưu vào keychain, không bao giờ trả về
+}
+
+export interface ManagedTunnelReq {
+  name: string;
+  kind: ManagedTunnelKind;
+  targetUrl: string;
+  hostname?: string | null;
+  cfTunnelName?: string | null;
+  autoStart?: boolean;
+  notes?: string;
+  token?: string;
+}
+
+export interface ManagedTunnel {
+  id: string;
+  name: string;
+  kind: ManagedTunnelKind;
+  targetUrl: string;
+  hostname: string | null;
+  cfTunnelName: string | null;
+  hasToken: boolean;
+  autoStart: boolean;
+  notes: string;
+  running: boolean;
+  connected: boolean;
+  pid: number | null;
+  publicUrl: string | null;
+  startedAt: string | null;
+  lastError: string | null;
+  logTail: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ExternalCloudflaredProc {
+  pid: number;
+  commandLine: string;
+  targetHint: string;
+}
+
+export interface TunnelsOverview {
+  cloudflaredFound: boolean;
+  cloudflaredPath: string | null;
+  defaultTargetUrl: string;
+  managed: ManagedTunnel[];
+  external: ExternalCloudflaredProc[];
+}
+
+// ---------- Shared Memory & 3-Agent Handoff Center (P11) ----------
+export interface MemoryDocStatus {
+  id: string;
+  relPath: string;
+  group: 'shared' | 'handoff' | 'workspace';
+  titleVi: string;
+  titleEn: string;
+  agents: AiProviderId[];
+  exists: boolean;
+  sizeBytes: number;
+  updatedAt: string | null;
+  preview: string;
+}
+
+export interface HandoffEntry {
+  id: number;
+  agent: string;
+  repoSha: string | null;
+  summary: string;
+  createdAt: string;
+}
+
+export interface MemoryOverview {
+  workspaceDir: string;
+  isCustomDir: boolean;
+  docs: MemoryDocStatus[];
+  recentHandoffs: HandoffEntry[];
+}
+
+export interface MemoryDocContent {
+  id: string;
+  relPath: string;
+  exists: boolean;
+  content: string;
 }
 
 // ---------- Devices / sessions ----------
@@ -353,7 +554,7 @@ export interface RenderRequest {
 
 export interface Job {
   id: string;
-  kind: 'render' | 'thumbnail' | 'install' | 'scan';
+  kind: 'render' | 'thumbnail' | 'install' | 'scan' | 'studio';
   status: JobStatus;
   title: string;
   progress: number; // 0..1
@@ -399,7 +600,8 @@ export type ServerEvent =
   | { type: 'server'; data: ServerStatus }
   | { type: 'tunnel'; data: TunnelStatus }
   | { type: 'tool'; data: ToolStatus }
-  | { type: 'skills'; data: { sourceId: string } };
+  | { type: 'skills'; data: { sourceId: string } }
+  | { type: 'studio'; data: StudioSession };
 
 export interface ApiError {
   error: string; // mã lỗi máy đọc, vd "unauthorized", "forbidden", "validation"

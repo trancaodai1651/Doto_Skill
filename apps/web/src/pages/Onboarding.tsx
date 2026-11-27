@@ -4,6 +4,7 @@ import { Badge, Button, Card, Checkbox, ConfirmDialog, EmptyState, Progress, Tex
 import { api } from '../api/client';
 import type { AppSettings, ServerMode } from '../api/types';
 import { AsyncView, Code, ErrorBlock, ExternalLink, KeyValue, LoadingBlock, useNotify } from '../components/common';
+import { BrowseFolderButton } from '../components/FolderPicker';
 import {
   AddFolderSourceForm,
   AddGithubSourceForm,
@@ -213,12 +214,20 @@ export function FoldersForm({ settings, onSaved }: { settings: AppSettings; onSa
   const [dirs, setDirs] = useState<string[]>(settings.videoSourceDirs);
   const [newDir, setNewDir] = useState('');
   const [output, setOutput] = useState(settings.outputDir ?? '');
+  const [uploadDir, setUploadDir] = useState(settings.mediaUploadDir ?? '');
+  const [skillDir, setSkillDir] = useState(settings.customSkillDir ?? '');
+  const [memDir, setMemDir] = useState(settings.workspaceMemoryDir ?? '');
   const [errs, setErrs] = useState<Record<string, string>>({});
   const [confirm, setConfirm] = useState(false);
-  const dirty = JSON.stringify(dirs) !== JSON.stringify(settings.videoSourceDirs) || (output.trim() || null) !== settings.outputDir;
+  const dirty =
+    JSON.stringify(dirs) !== JSON.stringify(settings.videoSourceDirs) ||
+    (output.trim() || null) !== settings.outputDir ||
+    (uploadDir.trim() || null) !== (settings.mediaUploadDir ?? null) ||
+    (skillDir.trim() || null) !== (settings.customSkillDir ?? null) ||
+    (memDir.trim() || null) !== (settings.workspaceMemoryDir ?? null);
 
-  function addDir() {
-    const d = newDir.trim();
+  function addDir(custom?: string) {
+    const d = (custom ?? newDir).trim();
     if (!d) return;
     if (!isAbsolutePath(d)) {
       setErrs({ newDir: t('path.absolute') });
@@ -230,11 +239,13 @@ export function FoldersForm({ settings, onSaved }: { settings: AppSettings; onSa
   }
 
   function save() {
-    if (output.trim() && !isAbsolutePath(output.trim())) {
-      setErrs({ output: t('path.absolute') });
-      return;
-    }
-    setErrs({});
+    const nextErrs: Record<string, string> = {};
+    if (output.trim() && !isAbsolutePath(output.trim())) nextErrs.output = t('path.absolute');
+    if (uploadDir.trim() && !isAbsolutePath(uploadDir.trim())) nextErrs.uploadDir = t('path.absolute');
+    if (skillDir.trim() && !isAbsolutePath(skillDir.trim())) nextErrs.skillDir = t('path.absolute');
+    if (memDir.trim() && !isAbsolutePath(memDir.trim())) nextErrs.memDir = t('path.absolute');
+    setErrs(nextErrs);
+    if (Object.keys(nextErrs).length > 0) return;
     setConfirm(true);
   }
 
@@ -274,22 +285,68 @@ export function FoldersForm({ settings, onSaved }: { settings: AppSettings; onSa
                 }
               }}
             />
-            <Button onClick={addDir}>{t('folders.add')}</Button>
+            <BrowseFolderButton currentPath={newDir} onSelect={(p) => addDir(p)} />
+            <Button onClick={() => addDir()}>{t('folders.add')}</Button>
           </div>
           <div className="mt-2">
             <HostDiskHints onSelect={(m) => setNewDir((cur) => cur || m)} />
           </div>
         </div>
-        <TextInput
-          label={t('folders.output')}
-          placeholder={t('sources.folderPlaceholder')}
-          value={output}
-          onChange={(e) => setOutput(e.target.value)}
-          error={errs.output}
-          hint={t('folders.outputHint')}
-          spellCheck={false}
-          autoCapitalize="none"
-        />
+        <div className="flex flex-wrap items-end gap-2">
+          <TextInput
+            fieldClassName="flex-1"
+            label={t('folders.output')}
+            placeholder={t('sources.folderPlaceholder')}
+            value={output}
+            onChange={(e) => setOutput(e.target.value)}
+            error={errs.output}
+            hint={t('folders.outputHint')}
+            spellCheck={false}
+            autoCapitalize="none"
+          />
+          <BrowseFolderButton currentPath={output} onSelect={(p) => setOutput(p)} />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="flex flex-wrap items-end gap-2">
+            <TextInput
+              fieldClassName="flex-1"
+              label={t('folders.uploadsDir')}
+              placeholder={settings.defaultUploadsDir ?? t('folders.outputHint')}
+              value={uploadDir}
+              onChange={(e) => setUploadDir(e.target.value)}
+              error={errs.uploadDir}
+              spellCheck={false}
+              autoCapitalize="none"
+            />
+            <BrowseFolderButton currentPath={uploadDir} onSelect={(p) => setUploadDir(p)} />
+          </div>
+          <div className="flex flex-wrap items-end gap-2">
+            <TextInput
+              fieldClassName="flex-1"
+              label={t('folders.customSkillsDir')}
+              placeholder={settings.defaultCustomSkillsDir ?? t('folders.outputHint')}
+              value={skillDir}
+              onChange={(e) => setSkillDir(e.target.value)}
+              error={errs.skillDir}
+              spellCheck={false}
+              autoCapitalize="none"
+            />
+            <BrowseFolderButton currentPath={skillDir} onSelect={(p) => setSkillDir(p)} />
+          </div>
+        </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <TextInput
+            fieldClassName="flex-1"
+            label={t('folders.memoryDir')}
+            placeholder={t('folders.outputHint')}
+            value={memDir}
+            onChange={(e) => setMemDir(e.target.value)}
+            error={errs.memDir}
+            spellCheck={false}
+            autoCapitalize="none"
+          />
+          <BrowseFolderButton currentPath={memDir} onSelect={(p) => setMemDir(p)} />
+        </div>
         <div>
           <Button variant="primary" disabled={!dirty} onClick={save}>
             {t('common.save')}
@@ -303,7 +360,14 @@ export function FoldersForm({ settings, onSaved }: { settings: AppSettings; onSa
         cancelLabel={t('common.cancel')}
         onCancel={() => setConfirm(false)}
         onConfirm={async () => {
-          const next: AppSettings = { ...settings, videoSourceDirs: dirs, outputDir: output.trim() || null };
+          const next: AppSettings = {
+            ...settings,
+            videoSourceDirs: dirs,
+            outputDir: output.trim() || null,
+            mediaUploadDir: uploadDir.trim() || null,
+            customSkillDir: skillDir.trim() || null,
+            workspaceMemoryDir: memDir.trim() || null,
+          };
           const r = await api.settings.put(next);
           setConfirm(false);
           onSaved(r && typeof r === 'object' && 'dataDir' in r ? r : next);
@@ -320,6 +384,16 @@ export function FoldersForm({ settings, onSaved }: { settings: AppSettings; onSa
           {output.trim() && (
             <li>
               {t('folders.output')}: <Code>{output.trim()}</Code>
+            </li>
+          )}
+          {uploadDir.trim() && (
+            <li>
+              {t('folders.uploadsDir')}: <Code>{uploadDir.trim()}</Code>
+            </li>
+          )}
+          {skillDir.trim() && (
+            <li>
+              {t('folders.customSkillsDir')}: <Code>{skillDir.trim()}</Code>
             </li>
           )}
         </ul>

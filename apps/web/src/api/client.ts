@@ -1,4 +1,5 @@
 import type {
+  AiProviderId,
   AppSettings,
   AuditEvent,
   BackupEntry,
@@ -8,11 +9,17 @@ import type {
   FfmpegStatus,
   GithubStatus,
   HardwareInfo,
+  HostDirsResponse,
   Job,
   JobDetail,
+  ManagedTunnel,
+  ManagedTunnelReq,
   Me,
+  MemoryDocContent,
+  MemoryOverview,
   Metrics,
   PairingCode,
+  ProfileId,
   ProviderId,
   RenderRequest,
   ResourceOverrides,
@@ -23,15 +30,20 @@ import type {
   ShareLink,
   Skill,
   SkillDetail,
+  SkillImportReport,
   SkillSource,
+  StudioProviderCatalog,
+  StudioRunDetail,
+  StudioRunRequest,
   ToolStatus,
   TunnelConfig,
   TunnelStatus,
+  TunnelsOverview,
   UpdateCheck,
+  UploadedMedia,
   User,
   VideoAsset,
   VideoKind,
-  ProfileId,
 } from './types';
 import { storage } from '../lib/storage';
 
@@ -142,28 +154,7 @@ export function createClient(opts: ClientOptions = {}) {
     return `${baseUrl}${withTicket}`;
   }
 
-  async function request<T>(method: Method, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
-    const cross = isCrossOrigin();
-    const headers: Record<string, string> = { Accept: 'application/json' };
-    if (body !== undefined) headers['Content-Type'] = 'application/json';
-    if (bearerToken) {
-      headers['Authorization'] = `Bearer ${bearerToken}`;
-    } else if (method !== 'GET' && csrfToken) {
-      headers['x-csrf-token'] = csrfToken;
-    }
-    let res: Response;
-    try {
-      res = await doFetch(baseUrl + path, {
-        method,
-        headers,
-        body: body === undefined ? undefined : JSON.stringify(body),
-        credentials: cross || bearerToken ? 'omit' : 'include',
-        signal,
-      });
-    } catch (e) {
-      if (e instanceof DOMException && e.name === 'AbortError') throw e;
-      throw new ApiRequestError(0, 'network', FALLBACK_MESSAGES.network!);
-    }
+  async function parseResponse<T>(res: Response): Promise<T> {
     const text = await res.text().catch(() => '');
     let parsed: unknown = undefined;
     if (text) {
@@ -186,8 +177,61 @@ export function createClient(opts: ClientOptions = {}) {
     return parsed as T;
   }
 
+  async function request<T>(method: Method, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+    const cross = isCrossOrigin();
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (body !== undefined) headers['Content-Type'] = 'application/json';
+    if (bearerToken) {
+      headers['Authorization'] = `Bearer ${bearerToken}`;
+    } else if (method !== 'GET' && csrfToken) {
+      headers['x-csrf-token'] = csrfToken;
+    }
+    let res: Response;
+    try {
+      res = await doFetch(baseUrl + path, {
+        method,
+        headers,
+        body: body === undefined ? undefined : JSON.stringify(body),
+        credentials: cross || bearerToken ? 'omit' : 'include',
+        signal,
+      });
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') throw e;
+      throw new ApiRequestError(0, 'network', FALLBACK_MESSAGES.network!);
+    }
+    return parseResponse<T>(res);
+  }
+
+  async function postBinary<T>(path: string, body: BodyInit, contentType = 'application/octet-stream', signal?: AbortSignal): Promise<T> {
+    const cross = isCrossOrigin();
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+      'Content-Type': contentType || 'application/octet-stream',
+    };
+    if (bearerToken) {
+      headers['Authorization'] = `Bearer ${bearerToken}`;
+    } else if (csrfToken) {
+      headers['x-csrf-token'] = csrfToken;
+    }
+    let res: Response;
+    try {
+      res = await doFetch(baseUrl + path, {
+        method: 'POST',
+        headers,
+        body,
+        credentials: cross || bearerToken ? 'omit' : 'include',
+        signal,
+      });
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') throw e;
+      throw new ApiRequestError(0, 'network', FALLBACK_MESSAGES.network!);
+    }
+    return parseResponse<T>(res);
+  }
+
   return {
     request,
+    postBinary,
     get: <T>(path: string, signal?: AbortSignal) => request<T>('GET', path, undefined, signal),
     post: <T>(path: string, body?: unknown) => request<T>('POST', path, body ?? {}),
     put: <T>(path: string, body: unknown) => request<T>('PUT', path, body),
@@ -262,6 +306,21 @@ export function createApi(http: HttpClient) {
       revoke: (id: string) => http.del<void>(`/api/devices/${enc(id)}`),
       createPairing: (role: Role, ttlMinutes: number) => http.post<PairingCode>('/api/pairing', { role, ttlMinutes }),
     },
+    fs: {
+      dirs: (path?: string) => http.get<HostDirsResponse>(`/api/fs/dirs${qs({ path })}`),
+      mkdir: (parent: string, name: string) => http.post<{ ok: boolean; path: string }>('/api/fs/mkdir', { parent, name, confirm: true }),
+    },
+    uploads: {
+      list: () => http.get<UploadedMedia[]>('/api/uploads'),
+      upload: (file: File, title?: string) =>
+        http.postBinary<{ upload: UploadedMedia; video: VideoAsset | null }>(
+          `/api/videos/upload${qs({ filename: file.name, title })}`,
+          file,
+          file.type || 'application/octet-stream',
+        ),
+      previewUrl: (id: string) => http.mediaUrl(`/api/uploads/${enc(id)}/preview`),
+      remove: (id: string) => http.del<{ ok: boolean }>(`/api/uploads/${enc(id)}`),
+    },
     system: {
       hardware: () => http.get<HardwareInfo>('/api/system/hardware'),
       probeHardware: () => http.post<HardwareInfo | undefined>('/api/system/hardware/probe'),
@@ -295,6 +354,30 @@ export function createApi(http: HttpClient) {
       addFolder: (path: string, watch?: boolean) => http.post<SkillSource>('/api/skill-sources/folder', { path, watch }),
       addGithub: (url: string, ref?: string, isPrivate?: boolean) =>
         http.post<SkillSource>('/api/skill-sources/github', { url, ref: ref || undefined, private: isPrivate }),
+      importArchive: (file: File, opts: { overwrite?: boolean; autoMd?: boolean }) =>
+        http.postBinary<SkillImportReport>(
+          `/api/skill-sources/archive${qs({
+            filename: file.name,
+            overwrite: opts.overwrite ?? false,
+            autoMd: opts.autoMd ?? false,
+            confirm: true,
+          })}`,
+          file,
+          file.type || 'application/octet-stream',
+        ),
+      uploadFolder: (payload: {
+        folderName: string;
+        files: { path: string; contentBase64: string }[];
+        overwrite?: boolean;
+        autoMd?: boolean;
+      }) =>
+        http.post<SkillImportReport>('/api/skill-sources/upload-folder', {
+          folderName: payload.folderName,
+          files: payload.files,
+          overwrite: payload.overwrite ?? false,
+          autoMd: payload.autoMd ?? false,
+          confirm: true,
+        }),
       patchSource: (id: string, patch: { enabled?: boolean; watch?: boolean; pinned?: boolean }) =>
         http.patch<SkillSource | undefined>(`/api/skill-sources/${enc(id)}`, patch),
       rescan: (id: string) => http.post<unknown>(`/api/skill-sources/${enc(id)}/rescan`),
@@ -315,6 +398,14 @@ export function createApi(http: HttpClient) {
       install: (id: ProviderId, methodId: string) => http.post<Job>(`/api/tools/${enc(id)}/install`, { methodId, confirm: true }),
       diagnostics: (id: ProviderId) => http.get<{ lines: string[] }>(`/api/tools/${enc(id)}/diagnostics`),
     },
+    studio: {
+      catalog: () => http.get<{ providers: StudioProviderCatalog[] }>('/api/studio/catalog'),
+      runs: () => http.get<StudioRunDetail[]>('/api/studio/runs'),
+      run: (id: string) => http.get<StudioRunDetail>(`/api/studio/runs/${enc(id)}`),
+      start: (req: StudioRunRequest) => http.post<StudioRunDetail>('/api/studio/runs', req),
+      cancelRun: (id: string) => http.post<{ ok: boolean; canceled: number }>(`/api/studio/runs/${enc(id)}/cancel`),
+      cancelSession: (id: string) => http.post<{ ok: boolean }>(`/api/studio/sessions/${enc(id)}/cancel`),
+    },
     server: {
       status: () => http.get<ServerStatus>('/api/server/status'),
       config: () => http.get<ServerConfig>('/api/server/config'),
@@ -331,6 +422,25 @@ export function createApi(http: HttpClient) {
       start: () => http.post<TunnelStatus | undefined>('/api/tunnel/start'),
       stop: () => http.post<TunnelStatus | undefined>('/api/tunnel/stop'),
       deleteToken: () => http.del<void>('/api/tunnel/token'),
+    },
+    tunnels: {
+      overview: () => http.get<TunnelsOverview>('/api/tunnels'),
+      create: (req: ManagedTunnelReq) => http.post<ManagedTunnel>('/api/tunnels', req),
+      update: (id: string, req: ManagedTunnelReq) => http.patch<ManagedTunnel>(`/api/tunnels/${enc(id)}`, req),
+      remove: (id: string) => http.del<{ ok: boolean }>(`/api/tunnels/${enc(id)}`),
+      start: (id: string) => http.post<ManagedTunnel>(`/api/tunnels/${enc(id)}/start`),
+      stop: (id: string) => http.post<ManagedTunnel>(`/api/tunnels/${enc(id)}/stop`),
+      quickWeb: () => http.post<ManagedTunnel>('/api/tunnels/quick-web', { confirm: true }),
+      stopExternal: (pid: number) => http.post<{ ok: boolean; pid: number }>(`/api/tunnels/processes/${pid}/stop`, { confirm: true }),
+    },
+    memory: {
+      overview: () => http.get<MemoryOverview>('/api/memory'),
+      readDoc: (id: string) => http.get<MemoryDocContent>(`/api/memory/doc${qs({ id })}`),
+      writeDoc: (id: string, content: string) => http.put<{ ok: boolean; id: string }>('/api/memory/doc', { id, content, confirm: true }),
+      append: (payload: { id?: string; agent?: string; note: string }) => http.post<{ ok: boolean; id: string }>('/api/memory/append', payload),
+      init: (overwrite = false) => http.post<{ ok: boolean; created: string[]; kept: string[] }>('/api/memory/init', { overwrite, confirm: true }),
+      recordHandoff: (payload: { agent: AiProviderId; summary: string; nextAction?: string }) =>
+        http.post<{ ok: boolean }>('/api/memory/handoff', payload),
     },
     videos: {
       list: (kind?: VideoKind | '', q?: string) => http.get<VideoAsset[]>(`/api/videos${qs({ kind, q })}`),
