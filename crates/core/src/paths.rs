@@ -32,6 +32,8 @@ impl AppPaths {
             self.data_dir.clone(),
             self.thumbnails_dir(),
             self.default_exports_dir(),
+            self.default_uploads_dir(),
+            self.default_custom_skills_dir(),
             self.skills_cache_dir(),
             self.backups_dir(),
             self.logs_dir(),
@@ -50,6 +52,15 @@ impl AppPaths {
     }
     pub fn default_exports_dir(&self) -> PathBuf {
         self.data_dir.join("exports")
+    }
+    pub fn default_uploads_dir(&self) -> PathBuf {
+        self.data_dir.join("uploads")
+    }
+    pub fn default_custom_skills_dir(&self) -> PathBuf {
+        self.data_dir.join("custom-skills")
+    }
+    pub fn default_workspace_memory_dir(&self) -> PathBuf {
+        self.data_dir.join("workspace-memory")
     }
     pub fn skills_cache_dir(&self) -> PathBuf {
         self.data_dir.join("skills-cache")

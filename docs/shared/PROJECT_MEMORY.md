@@ -5,16 +5,16 @@
 ## 1. Mục tiêu sản phẩm
 Ứng dụng desktop **Windows + macOS** (Tauri v2) đồng thời là **máy chủ web cục bộ** để thiết bị khác xem/tải thư viện video qua trình duyệt. Tích hợp: quản lý nhiều nguồn AI Skills (thư mục + GitHub), cài đặt có xác nhận 4 công cụ (Antigravity `agy`, Codex `codex`, Claude Code `claude`, `cloudflared`), nhận diện phần cứng, 3 profile tài nguyên, pipeline render video FFmpeg thật, bộ nhớ chung cho 3 agent.
 
-## 2. Kiến trúc hiện tại (v0.1.0)
+## 2. Kiến trúc hiện tại (v0.2.0)
 ```
-apps/desktop (Tauri v2, tray, autostart) ──in-process──► crates/server (Axum)
+apps/desktop (Tauri v2, tray, autostart) ──in-process──► crates/server (Axum: routes + v02 + memory + Cloudflare Access)
                                                          ├─ listener Control 127.0.0.1:<ngẫu nhiên>  → cửa sổ desktop
                                                          └─ listener Public  Off | 127.0.0.1 | LAN(IP/0.0.0.0):4380 → bản Web, cloudflared
-crates/server ─► crates/core (SQLite WAL + migrations, backup/restore, settings, audit, jobs, EventBus, OS vault)
+crates/server ─► crates/core (SQLite WAL v2 + migrations, backup/restore, settings, audit, jobs, EventBus, OS vault)
               ─► crates/system (HardwareProbe, ResourceManager + admission)
-              ─► crates/media (FFmpeg discover/verify, encoder probe & 720p benchmark, library, render queue)
-              ─► crates/skills (scanner, GitHub client, SkillService, provider mapping)
-              ─► crates/integrations (CliProvider ×4, ToolManager, cloudflared installer, TunnelManager)
+              ─► crates/media (FFmpeg discover/verify, encoder probe & 720p benchmark, library, mobile upload indexing, render queue)
+              ─► crates/skills (scanner, GitHub client, pure-Rust .zip/.tar.gz & folder upload importer, SkillService, provider mapping)
+              ─► crates/integrations (CliProvider ×4, ToolManager, StudioRunner đơn/đa phiên song song, Multi-Tunnel CRUD Manager)
 apps/web + packages/ui (React 19, TS strict, Vite, Tailwind 4) → build ra apps/web/dist, phục vụ tĩnh hoặc chạy độc lập kết nối tới URL máy chủ bản App
 ```
 - **Bản App & Bản Web đồng nhất 100% tính năng (ADR-013):** Owner đã xác thực trên bản Web (cùng miền hoặc kết nối từ xa tới địa chỉ máy chủ bản App) có đầy đủ mọi tính năng quản trị như trên cửa sổ Desktop, sử dụng trực tiếp phần cứng CPU/RAM/GPU của máy chủ bản App thông qua API allowlist an toàn. Browser không bao giờ gửi lệnh shell tuỳ ý hay đường dẫn thực thi giả (`ffmpegPath`/`ffprobePath` bắt buộc xác minh `-version` thật trước khi lưu). Chỉ `/api/auth/desktop` dành riêng cho token một lần của cửa sổ Tauri, và `/api/auth/setup` chỉ cho phép từ loopback khi chưa đặt mật khẩu Owner.
@@ -25,7 +25,7 @@ apps/web + packages/ui (React 19, TS strict, Vite, Tailwind 4) → build ra apps
 - **Skills:** 0 nguồn/0 skill ban đầu. Nguồn thư mục (watcher debounce 1.5s, gợi ý ổ đĩa máy chủ) và GitHub (resolve ref→SHA, tải tarball read-only, giải nén an toàn: chặn traversal/symlink/hardlink, giới hạn 200 MB nén/500 MB giải nén/50k entry; check-update hiển thị diff file trước khi apply; pin commit). Cài sang provider = **sao chép** kèm marker `.doto-skill.json`, không ghi đè thư mục người dùng, skill có script cần xác nhận riêng.
 
 ## 3. Quyết định đã chốt
-Xem `docs/shared/DECISIONS.md` (ADR-001…ADR-013).
+Xem `docs/shared/DECISIONS.md` (ADR-001…ADR-014).
 
 ## 4. Đường dẫn provider (tài liệu chính thức, kiểm tra 2026-11-26)
 | Provider | Skills cấp user | Kiểm tra đăng nhập |
@@ -50,9 +50,9 @@ Chi tiết + nguồn: `docs/INTEGRATIONS.md`.
 ## 6. Giả định & hạn chế hiện tại
 - GitHub OAuth Device Flow cần `DOTO_GITHUB_CLIENT_ID` của một OAuth App do chủ sở hữu tạo; khi chưa có, dùng tuỳ chọn "Dùng gh CLI" (đọc `gh auth token` với xác nhận) — đã hoạt động.
 - Chưa ký số / notarize installer (chưa có chứng chỉ Apple Developer / Windows code signing).
-- Chưa có Cloudflare Access tự động — chỉ hướng dẫn (khuyến nghị bật khi xuất bản Internet).
-- Chưa có tính năng AI auto-edit; kiến trúc job/skill cho phép mở rộng sau.
-- Thử nghiệm "thiết bị khác cùng LAN" mới kiểm chứng bằng trình duyệt trên cùng host qua IP Tailscale; chưa thử trên điện thoại vật lý.
+- Kiểm tra JWT `Cf-Access-Jwt-Assertion` của Cloudflare Access và CRUD đa tunnel đã được tích hợp; cần tài khoản Cloudflare Zero Trust của chủ sở hữu để kiểm chứng ngoài Internet thực tế.
+- AI Studio điều phối trực tiếp CLI `agy` / `claude` / `codex` (cần người dùng tự cài và đăng nhập từng CLI theo hướng dẫn chính thức).
+- Thử nghiệm thiết bị di động đã có E2E tự động trên `doto-server` thật; khuyến nghị kiểm thử thêm trên iPhone/Android vật lý cùng Wi-Fi.
 
 ## 7. Thiết lập máy dev
 Node ≥ 20.19 (đã dùng 26), Rust stable (1.99), ffmpeg/ffprobe trên PATH, Windows: WebView2 + MSVC build tools; macOS: Xcode CLT.

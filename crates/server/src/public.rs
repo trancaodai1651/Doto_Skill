@@ -18,11 +18,27 @@ pub struct ServerConfig {
     pub public_base_url: Option<String>,
     /// Giới hạn băng thông mỗi luồng video (kbps); 0 = theo profile.
     pub max_stream_kbps: u64,
+    /// Bắt buộc xác thực Cloudflare Access (`Cf-Access-Jwt-Assertion`) trên listener Public.
+    pub require_cf_access: bool,
+    /// Team domain trên Cloudflare Zero Trust (vd: `myteam.cloudflareaccess.com`).
+    pub cf_access_team_domain: Option<String>,
+    /// Application Audience (AUD) Tag của ứng dụng Cloudflare Access.
+    pub cf_access_aud: Option<String>,
 }
 
 impl Default for ServerConfig {
     fn default() -> Self {
-        Self { mode: "off".into(), port: 4380, lan_interface_ip: None, ip_allowlist: vec![], public_base_url: None, max_stream_kbps: 0 }
+        Self {
+            mode: "off".into(),
+            port: 4380,
+            lan_interface_ip: None,
+            ip_allowlist: vec![],
+            public_base_url: None,
+            max_stream_kbps: 0,
+            require_cf_access: false,
+            cf_access_team_domain: None,
+            cf_access_aud: None,
+        }
     }
 }
 
@@ -43,6 +59,17 @@ impl ServerConfig {
         if let Some(u) = &self.public_base_url {
             if !(u.starts_with("https://") || u.starts_with("http://")) || u.len() > 200 {
                 return Err("publicBaseUrl phải bắt đầu bằng https:// hoặc http://".into());
+            }
+        }
+        if let Some(td) = self.cf_access_team_domain.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+            let clean = td.trim_start_matches("https://").trim_end_matches('/');
+            if clean.len() > 160 || clean.chars().any(|c| !(c.is_ascii_alphanumeric() || matches!(c, '.' | '-'))) {
+                return Err("Cloudflare Access Team Domain không hợp lệ".into());
+            }
+        }
+        if let Some(aud) = self.cf_access_aud.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+            if !(8..=256).contains(&aud.len()) || aud.chars().any(char::is_whitespace) {
+                return Err("Cloudflare Access AUD tag không hợp lệ".into());
             }
         }
         Ok(())
@@ -73,6 +100,56 @@ pub fn ip_allowed(list: &[String], ip: Option<IpAddr>) -> bool {
         return true;
     }
     list.iter().filter_map(|c| parse_cidr(c)).any(|n| n.contains(&ip))
+}
+
+/// Kiểm tra header `Cf-Access-Jwt-Assertion` khi bật Cloudflare Access trên listener Public.
+/// Vì `cloudflared` chạy cục bộ trên loopback và Cloudflare Edge luôn strip header giả mạo từ Internet,
+/// chúng ta đồng thời chặn kết nối không đến từ loopback (ngăn bypass qua LAN) và kiểm tra cấu trúc + claims `exp`/`iss`/`aud`.
+pub fn verify_cf_access_jwt(cfg: &ServerConfig, raw_jwt: Option<&str>, peer_is_loopback: bool) -> Result<(), &'static str> {
+    if !cfg.require_cf_access {
+        return Ok(());
+    }
+    if !peer_is_loopback {
+        return Err("Cloudflare Access đang bật — từ chối kết nối trực tiếp không đi qua cloudflared cục bộ");
+    }
+    let tok = raw_jwt.map(str::trim).filter(|s| !s.is_empty()).ok_or("thiếu header Cf-Access-Jwt-Assertion của Cloudflare Access")?;
+    let mut parts = tok.split('.');
+    let (Some(hdr), Some(payload_b64), Some(sig), None) = (parts.next(), parts.next(), parts.next(), parts.next()) else {
+        return Err("Cf-Access-Jwt-Assertion không đúng định dạng JWT");
+    };
+    if hdr.is_empty() || payload_b64.is_empty() || sig.len() < 16 {
+        return Err("chữ ký Cf-Access-Jwt-Assertion không hợp lệ");
+    }
+    use base64::Engine;
+    let decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(payload_b64)
+        .or_else(|_| base64::engine::general_purpose::URL_SAFE.decode(payload_b64))
+        .map_err(|_| "không giải mã được payload Cf-Access-Jwt-Assertion")?;
+    let claims: serde_json::Value = serde_json::from_slice(&decoded).map_err(|_| "payload Cf-Access-Jwt-Assertion không phải JSON")?;
+    let exp = claims.get("exp").and_then(|v| v.as_i64()).ok_or("JWT thiếu trường exp")?;
+    if exp <= chrono::Utc::now().timestamp() - 30 {
+        return Err("phiên Cloudflare Access đã hết hạn (exp)");
+    }
+    if let Some(td) = cfg.cf_access_team_domain.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        let clean = td.trim_start_matches("https://").trim_end_matches('/');
+        let domain = if clean.contains('.') { clean.to_string() } else { format!("{clean}.cloudflareaccess.com") };
+        let expected_iss = format!("https://{domain}");
+        let got_iss = claims.get("iss").and_then(|v| v.as_str()).unwrap_or("").trim_end_matches('/');
+        if !got_iss.eq_ignore_ascii_case(&expected_iss) {
+            return Err("issuer (iss) của Cloudflare Access không khớp Team Domain");
+        }
+    }
+    if let Some(expected_aud) = cfg.cf_access_aud.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        let matched = match claims.get("aud") {
+            Some(serde_json::Value::String(s)) => s == expected_aud,
+            Some(serde_json::Value::Array(arr)) => arr.iter().any(|x| x.as_str() == Some(expected_aud)),
+            _ => false,
+        };
+        if !matched {
+            return Err("audience (aud) của Cloudflare Access không khớp cấu hình");
+        }
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize)]

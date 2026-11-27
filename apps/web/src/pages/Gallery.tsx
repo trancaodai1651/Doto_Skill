@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { Badge, Button, ConfirmDialog, EmptyState, Select, TextInput, useToast } from '@doto/ui';
-import { api } from '../api/client';
+import { api, http } from '../api/client';
 import { useServerEvent } from '../api/events';
 import type { ShareLink, VideoAsset, VideoKind } from '../api/types';
-import { AsyncView, KeyValue, PageHeader } from '../components/common';
+import { AsyncView, KeyValue, PageHeader, useNotify } from '../components/common';
 import { VideoThumb, videoMeta } from '../components/video';
 import { useI18n } from '../i18n';
 import { formatBytes, formatDate, formatDuration, formatResolution } from '../lib/format';
@@ -137,6 +137,7 @@ export function PlayerPage() {
               <a href={api.videos.downloadUrl(v.id)} download={v.fileName} className="ui-btn ui-btn--primary" data-testid="download-link">
                 ⬇ {t('player.download')}
               </a>
+              <SaveToPhotosButton video={v} />
               {v.status !== 'ready' && <Badge tone="danger">{t(`video.status.${v.status}`)}</Badge>}
             </div>
             {isOwner && v.kind === 'export' && <SharePanel videoId={v.id} />}
@@ -160,6 +161,60 @@ export function PlayerPage() {
 }
 
 const SHARE_TTLS = [60, 24 * 60, 7 * 24 * 60];
+
+function SaveToPhotosButton({ video }: { video: VideoAsset }) {
+  const { t } = useI18n();
+  const notify = useNotify();
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <Button
+      variant="secondary"
+      loading={busy}
+      data-testid="save-photos-btn"
+      onClick={async () => {
+        setBusy(true);
+        try {
+          const url = api.videos.downloadUrl(video.id);
+          const headers: Record<string, string> = {};
+          const bearer = http.getBearerToken();
+          if (bearer) headers['Authorization'] = `Bearer ${bearer}`;
+          const res = await fetch(url, {
+            headers,
+            credentials: http.isCrossOrigin() || bearer ? 'omit' : 'include',
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const blob = await res.blob();
+          const safeName = video.fileName.toLowerCase().endsWith('.mp4') ? video.fileName : `${video.title || 'video'}.mp4`;
+          const file = new File([blob], safeName, { type: 'video/mp4' });
+          const nav = navigator as Navigator & {
+            canShare?: (data?: ShareData) => boolean;
+          };
+          if (typeof nav.share === 'function' && typeof nav.canShare === 'function' && nav.canShare({ files: [file] })) {
+            await nav.share({ files: [file], title: video.title });
+          } else {
+            const objUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = objUrl;
+            a.download = safeName;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(objUrl), 5000);
+            notify.info(t('player.savePhotos'), t('player.shareFallback'));
+          }
+        } catch (e) {
+          if (e instanceof Error && e.name === 'AbortError') return;
+          notify.fail(e);
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      📲 {t('player.savePhotos')}
+    </Button>
+  );
+}
 
 /** Owner tạo/thu hồi link chia sẻ có hạn cho video đã xuất (API: GET/POST /api/videos/:id/shares|share, DELETE /api/shares/:id). */
 function SharePanel({ videoId }: { videoId: string }) {

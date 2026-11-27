@@ -11,7 +11,8 @@
 | Tar/zip bomb, repo khổng lồ | Giới hạn 200 MB nén, 500 MB giải nén, 50k entry, 2k file/skill, 512 KB/SKILL.md | unit test |
 | Skill độc hại | Không tự chạy script; cảnh báo `hasScripts`, `hooks`, `allowed-tools`; cài cần xác nhận + cho phép script riêng | `skills/tests/service.rs` |
 | Lộ token | OS vault; header Authorization; lọc bí mật trong log/audit/job log; token tunnel qua env, không argv; secrets-scan trong CI | unit test redact + test audit không chứa token |
-| Lộ máy ra Internet ngoài ý muốn | Mặc định Off; LAN cần xác nhận + mật khẩu Owner; cảnh báo IP public; không UPnP; IP allowlist | demo + unit test |
-| Nghẽn host | Giới hạn luồng stream theo profile, băng thông tuỳ chọn, giới hạn body 2 MB, scheduler có backpressure | unit test admission |
+| Lộ máy ra Internet ngoài ý muốn | Mặc định Off; LAN cần xác nhận + mật khẩu Owner; cảnh báo IP public; không UPnP; IP allowlist; hỗ trợ bắt buộc **Cloudflare Access** (`Cf-Access-Jwt-Assertion`: kiểm tra loopback `cloudflared` + `iss`/`aud`/`exp`) | `api_security.rs::v02_studio_upload_archive_tunnels_cf_access_and_memory_parity` |
+| Duyệt thư mục / tải tệp / bộ nhớ chung | `/api/fs/dirs` chỉ cho Owner, chỉ trả tên thư mục con (không theo symlink, không đọc file); upload chỉ nhận đuôi ảnh/video an toàn (≤ 1 GB stream `.part`); import `.zip`/`.tar.gz` kiểm CRC-32 + chặn Zip-Slip; `/api/memory/*` khoá chặt allowlist tệp `.md` và tự lọc `[REDACTED]`; dừng tiến trình ngoài chỉ cho phép tên `cloudflared` | cùng test + unit test `importer.rs`, `memory.rs`, `tunnel.rs` |
+| Nghẽn host | Giới hạn luồng stream theo profile, băng thông tuỳ chọn, giới hạn body 2 MB cho JSON (tách riêng route stream upload), scheduler có backpressure | unit test admission |
 
 Báo lỗi bảo mật: mở issue riêng tư (Security advisory) trên GitHub repo, không đăng công khai chi tiết khai thác.

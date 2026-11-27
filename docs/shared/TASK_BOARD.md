@@ -5,17 +5,16 @@
 ## In progress
 | Task | Owner | Ghi chú / next action |
 | --- | --- | --- |
-| _(Không có — `v0.1.0` đã phát hành trên `main`)_ | — | Xem mục **Pending** bên dưới cho v0.2.0 |
+| _(Không có — `v0.2.0` hoàn tất P0–P13)_ | — | Xem mục **Pending** bên dưới cho kiểm thử thiết bị vật lý & chứng chỉ |
 
 ## Pending
 | Task | Owner | Ghi chú |
 | --- | --- | --- |
 | Đăng ký GitHub OAuth App, cấu hình `DOTO_GITHUB_CLIENT_ID` cho Device Flow | chủ repo | Blocker B1 — cần tài khoản GitHub của chủ sở hữu |
-| Kiểm chứng named tunnel thật (token Zero Trust + hostname) và Quick Tunnel trên máy người dùng | bất kỳ | Blocker B2 — cần tài khoản Cloudflare; code + test đơn vị + fix SSE tunnel đã có |
-| Kiểm chứng trên điện thoại/tablet vật lý cùng LAN | chủ repo | Hiện kiểm chứng bằng trình duyệt qua IP LAN/Tailscale cùng host |
+| Kiểm chứng named tunnel thật (token Zero Trust + hostname) và Cloudflare Access trên domain sản xuất | chủ repo | Blocker B2 — code CRUD đa tunnel + kiểm tra `Cf-Access-Jwt-Assertion` đã xong & có test tự động |
+| Kiểm chứng trên điện thoại/tablet vật lý cùng LAN (upload App Photos & Web Share Level 2) | chủ repo | Đã kiểm chứng tự động qua Playwright E2E trên `doto-server` thật |
 | Chạy installer macOS trên máy Mac thật (Intel + Apple Silicon) | bất kỳ | CI build universal (`lipo` x86_64 + arm64); cần người kiểm thử trên phần cứng Mac |
 | Ký số Authenticode / Apple notarization | chủ repo | Cần chứng chỉ (Blocker B3) |
-| Playwright E2E chạy trực tiếp trên binary `doto-server` trong CI | codex | Dùng `doto-server --token-file` |
 
 ## Blocked
 | ID | Mô tả | Cách gỡ |
@@ -23,6 +22,14 @@
 | B1 | Device Flow GitHub cần OAuth App client_id | Tạo OAuth App (Settings › Developer settings › OAuth Apps, bật Device Flow) → đặt biến môi trường `DOTO_GITHUB_CLIENT_ID` khi chạy app/CI build |
 | B2 | Tunnel production cần tài khoản Cloudflare + domain | Tạo tunnel trên Zero Trust, public hostname → `http://127.0.0.1:<port>`, dán token vào app |
 | B3 | Ký mã/notarize | Thêm secrets `APPLE_*` cho release workflow; chứng chỉ Windows |
+
+## Done (v0.2.0 — 2026-11-27, antigravity)
+- **P7 — Duyệt thư mục máy chủ & Mobile/App Photos Media:** API `/api/fs/dirs`, `/api/fs/mkdir` (chỉ liệt kê thư mục con, không theo symlink, chặn Viewer `403`), `<FolderPickerModal />` dùng chung cho cả App & Web, stream upload ảnh/video tới 1 GB (`POST /api/videos/upload` → tự lập chỉ mục `video_assets`) và nút **Lưu về App Photos / Chia sẻ** (`navigator.share({ files })`).
+- **P8 — Import Skill từ tệp nén & tải thư mục trình duyệt:** bộ giải nén `.zip` thuần Rust (kiểm CRC-32, chặn Zip-Slip & zip bomb) + `.tar.gz`/`.tar` + fallback `tar` hệ thống (`.7z`/`.rar` kèm dọn symlink), tải thư mục `webkitdirectory` (`POST /api/skill-sources/upload-folder`), tuỳ chọn tự tạo `SKILL.md` tối thiểu, không bao giờ tự chạy script.
+- **P9 — AI Studio đơn phiên & đa phiên song song:** `StudioRunner` (`crates/integrations/src/studio.rs`) + trang `/studio` chạy `single`, `multi_same_ai`, `multi_ai` (`Antigravity` `agy`, `Claude Code` `claude`, `OpenAI Codex` `codex`) bằng đối số cố định không qua shell, truyền prompt nhiều dòng qua `stdin` (chống lỗi `.cmd` CVE-2024-24576 trên Windows), thư mục xuất cô lập từng phiên, phân tích `stream-json` trực tiếp qua SSE, huỷ từng phiên/toàn bộ và tự lập chỉ mục video MP4 mới xuất.
+- **P10 — CRUD đa Cloudflare Tunnel & Cloudflare Access:** bảng `managed_tunnels` + OS Vault riêng từng tunnel (`cloudflare.tunnel.<id>`, truyền qua env `TUNNEL_TOKEN`), nút mở nhanh Quick Web Tunnel, dò & dừng an toàn tiến trình `cloudflared` ngoài, và xác thực JWT `Cf-Access-Jwt-Assertion` (`iss`, `aud`, `exp`, loopback `cloudflared`) trên listener Public.
+- **P11 — Trung tâm Shared Memory & Handoff 3 AI trên UI:** API `/api/memory/*` + trang `/memory` quản lý allowlist tệp điều phối (`PROJECT_MEMORY.md`, `ROADMAP.md`, `TASK_BOARD.md`, `DECISIONS.md`, `HANDOFF_*.md`, `MEMORY.md`, `HANDOFF.md`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`), tự lọc `[REDACTED]` trước khi ghi đĩa.
+- **P12 & P13 — Kiểm thử toàn diện, E2E `doto-server` thật trong CI & Release `v0.2.0`:** 115 test Rust + 33 unit test Web + 5 kịch bản Playwright E2E mock + 1 kịch bản Playwright E2E toàn trình trên binary `doto-server` thật trong CI; nâng phiên bản `0.2.0` và phát hành GitHub Release `v0.2.0`.
 
 ## Done (v0.1.0 — 2026-11-26, claude + antigravity)
 - Monorepo + 6 crate Rust + Tauri desktop + web React; clippy `-D warnings`, rustfmt.

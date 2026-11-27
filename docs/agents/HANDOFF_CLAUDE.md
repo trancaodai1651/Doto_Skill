@@ -3,21 +3,19 @@
 > Đọc trước: `AGENTS.md` → `docs/shared/PROJECT_MEMORY.md` → `docs/shared/ROADMAP.md` → `docs/shared/TASK_BOARD.md` → file này.
 > Sau khi làm: cập nhật `docs/shared/*` rồi `npm run handoff -- --agent claude --summary "..." --next "..."` (đồng bộ cả 3 file handoff).
 
-## Phiên gần nhất (2026-11-26 · antigravity)
+## Phiên gần nhất (2026-11-27 · antigravity)
 **Đã làm:**
-- Đồng bộ đầy đủ 100% tính năng giữa bản App Desktop và bản Web cho Owner (`ADR-013`), kết nối tới phần cứng máy chủ của bản App (hỗ trợ cả truy cập trực tiếp LAN/Tunnel lẫn nhập URL máy chủ từ bản Web độc lập qua CORS Bearer + vé media ngắn hạn `POST /api/auth/ticket`).
-- Bổ sung sao lưu & khôi phục SQLite (`GET /api/system/backups`, `POST /api/system/restore`), benchmark encoder 720p (`POST /api/system/ffmpeg/benchmark`), danh sách link chia sẻ video (`GET /api/videos/:id/shares`), gợi ý ổ đĩa máy chủ, xác minh binary FFmpeg thật, chống self-deadlock khi restart server từ bản Web và sửa lỗi crash sự kiện log tunnel.
-- Hoàn tất kiểm thử (101 Rust + 33 Web unit + 4 Playwright E2E), đóng gói và phát hành GitHub Release `v0.1.0`.
+- Hoàn tất **P7 → P13 (`v0.2.0`)** đồng bộ 100% giữa bản App và bản Web (`ADR-014`): duyệt thư mục máy chủ (`/api/fs/dirs`), tải media từ điện thoại / App Photos + lưu về App Photos, import skill `.zip`/`.tar.gz` & tải thư mục trình duyệt, **AI Studio** điều phối đơn/đa phiên song song (`Antigravity` `agy` / `Claude Code` `claude` / `OpenAI Codex` `codex`), **CRUD đa Cloudflare Tunnel** + kiểm tra JWT **Cloudflare Access** (`Cf-Access-Jwt-Assertion`), trung tâm **Shared Memory & Handoff 3 AI** trên UI, và Playwright E2E chạy trực tiếp trên binary `doto-server` thật trong CI.
 
 **File/module cốt lõi:** `crates/{core,system,media,skills,integrations,server}`, `apps/desktop/src-tauri`, `apps/web`, `packages/ui`, `scripts/*.mjs`, `.github/workflows/{ci,release}.yml`, `docs/API.md`, `docs/SECURITY.md`.
 
-**Tests (máy dev Windows 11, 2026-11-26):** xem khối "Lần chạy test gần nhất" bên dưới và `docs/shared/LAST_TEST_RUN.md`.
+**Tests (máy dev Windows 11, 2026-11-27):** xem khối "Lần chạy test gần nhất" bên dưới và `docs/shared/LAST_TEST_RUN.md`.
 
-**Blocker:** B1 OAuth client_id cho GitHub Device Flow · B2 tài khoản Cloudflare để kiểm chứng tunnel thật · B3 chứng chỉ ký mã (chi tiết: `TASK_BOARD.md`).
+**Blocker:** B1 OAuth client_id cho GitHub Device Flow · B2 tài khoản Cloudflare để kiểm chứng tunnel/Access trên domain thật · B3 chứng chỉ ký mã (chi tiết: `TASK_BOARD.md`).
 
 ## Việc tiếp theo gợi ý cho Claude Code
 1. Nếu chủ sở hữu cung cấp OAuth App `client_id`: cấu hình `DOTO_GITHUB_CLIENT_ID` trong CI/Release workflow và kiểm chứng GitHub Device Flow với repo private.
-2. Tích hợp xác minh tuỳ chọn header `Cf-Access-Jwt-Assertion` (Cloudflare Access JWT) trên listener Public cho môi trường xuất bản Internet.
+2. Nếu cần xác minh chữ ký số RS256/ES256 trực tuyến từ JWKS `/cdn-cgi/access/certs` bên cạnh kiểm tra loopback `cloudflared` + claims `iss`/`aud`/`exp`, có thể mở rộng `verify_cf_access_jwt` trong `crates/server/src/public.rs`.
 3. Khi có chứng chỉ ký số Apple Developer / Windows Authenticode, cấu hình GitHub Secrets theo `docs/RELEASE.md` và phát hành bản signed/notarized.
 
 Cách chạy tiếp:

@@ -2,7 +2,16 @@ import { useEffect, useState } from 'react';
 import { Badge, Button, Card, Checkbox, ConfirmDialog, Select, TextArea, TextInput, StatusPill } from '@doto/ui';
 import { api } from '../api/client';
 import { useServerEvent } from '../api/events';
-import type { ServerConfig, ServerMode, ServerStatus, TunnelMode, TunnelStatus } from '../api/types';
+import type {
+  ManagedTunnel,
+  ManagedTunnelKind,
+  ManagedTunnelReq,
+  ServerConfig,
+  ServerMode,
+  ServerStatus,
+  TunnelMode,
+  TunnelStatus,
+} from '../api/types';
 import { AsyncView, Code, ExternalLink, HostOnly, KeyValue, LogBox, PageHeader, QrImage, useNotify } from '../components/common';
 import { FirewallGuide, LanConfirmDialog } from '../components/features';
 import { useI18n } from '../i18n';
@@ -20,6 +29,7 @@ export function ServerPage() {
         <ServerStatusCard />
         <ServerConfigCard />
         <TunnelCard />
+        <MultiTunnelsCard />
       </div>
     </>
   );
@@ -160,6 +170,9 @@ function ServerConfigForm({ config, lan, onSaved }: { config: ServerConfig; lan:
   const [iface, setIface] = useState(config.lanInterfaceIp ?? '');
   const [allow, setAllow] = useState(config.ipAllowlist.join('\n'));
   const [publicBaseUrl, setPublicBaseUrl] = useState(config.publicBaseUrl ?? '');
+  const [requireCfAccess, setRequireCfAccess] = useState(Boolean(config.requireCfAccess));
+  const [cfTeamDomain, setCfTeamDomain] = useState(config.cfAccessTeamDomain ?? '');
+  const [cfAud, setCfAud] = useState(config.cfAccessAud ?? '');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [confirm, setConfirm] = useState<'lan' | 'save' | null>(null);
 
@@ -176,7 +189,17 @@ function ServerConfigForm({ config, lan, onSaved }: { config: ServerConfig; lan:
     if (publicBaseUrl.trim() && !/^https?:\/\/[^\s/]+/i.test(publicBaseUrl.trim())) errs.publicBaseUrl = t('server.badUrl');
     setErrors(errs);
     if (Object.keys(errs).length) return null;
-    return { mode, port: p, lanInterfaceIp: iface || null, ipAllowlist: list, publicBaseUrl: publicBaseUrl.trim() || null };
+    return {
+      mode,
+      port: p,
+      lanInterfaceIp: iface || null,
+      ipAllowlist: list,
+      publicBaseUrl: publicBaseUrl.trim() || null,
+      maxStreamKbps: config.maxStreamKbps ?? 0,
+      requireCfAccess,
+      cfAccessTeamDomain: cfTeamDomain.trim() || null,
+      cfAccessAud: cfAud.trim() || null,
+    };
   }
 
   async function save(next: ServerConfig) {
@@ -238,6 +261,28 @@ function ServerConfigForm({ config, lan, onSaved }: { config: ServerConfig; lan:
           rows={3}
           spellCheck={false}
         />
+        <div className="sm:col-span-2 rounded-md border border-line bg-surface-2/40 p-3">
+          <Checkbox label={t('cfAccess.enable')} checked={requireCfAccess} onChange={(e) => setRequireCfAccess(e.target.checked)} />
+          <p className="mt-1 text-xs text-muted">{t('cfAccess.hint')}</p>
+          {requireCfAccess && (
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              <TextInput
+                label={t('cfAccess.teamDomain')}
+                placeholder="myteam.cloudflareaccess.com"
+                value={cfTeamDomain}
+                onChange={(e) => setCfTeamDomain(e.target.value)}
+                spellCheck={false}
+              />
+              <TextInput
+                label={t('cfAccess.aud')}
+                placeholder="AUD tag…"
+                value={cfAud}
+                onChange={(e) => setCfAud(e.target.value)}
+                spellCheck={false}
+              />
+            </div>
+          )}
+        </div>
       </fieldset>
       <div>
         <HostOnly>
@@ -482,5 +527,259 @@ function TunnelConfigForm({
         </HostOnly>
       </div>
     </form>
+  );
+}
+
+function MultiTunnelsCard() {
+  const { t } = useI18n();
+  const notify = useNotify();
+  const overview = useApi('tunnels-overview', () => api.tunnels.overview());
+  const [creating, setCreating] = useState(false);
+  const [name, setName] = useState('');
+  const [kind, setKind] = useState<ManagedTunnelKind>('quick');
+  const [targetUrl, setTargetUrl] = useState('');
+  const [hostname, setHostname] = useState('');
+  const [cfName, setCfName] = useState('');
+  const [token, setToken] = useState('');
+  const [autoStart, setAutoStart] = useState(false);
+  const [notes, setNotes] = useState('');
+  const [confirmQuick, setConfirmQuick] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  useServerEvent('tunnel', () => {
+    void overview.reload();
+  });
+
+  return (
+    <Card
+      title={t('tunnels.crudTitle')}
+      description={t('tunnels.crudDesc')}
+      actions={
+        <HostOnly>
+          <Button size="sm" onClick={() => void overview.reload()}>
+            {t('common.reload')}
+          </Button>
+          <Button size="sm" variant="secondary" onClick={() => setCreating((v) => !v)}>
+            + {t('tunnels.addBtn')}
+          </Button>
+          <Button size="sm" variant="primary" disabled={!overview.data?.cloudflaredFound} onClick={() => setConfirmQuick(true)}>
+            ⚡ {t('tunnels.quickWebBtn')}
+          </Button>
+        </HostOnly>
+      }
+    >
+      <AsyncView state={overview}>
+        {(ov) => (
+          <div className="flex flex-col gap-4 text-sm">
+            {creating && (
+              <form
+                className="grid gap-3 rounded-md border border-line bg-surface-2/40 p-3 sm:grid-cols-2"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  const req: ManagedTunnelReq = {
+                    name: name.trim(),
+                    kind,
+                    targetUrl: (targetUrl.trim() || ov.defaultTargetUrl),
+                    hostname: hostname.trim() || null,
+                    cfTunnelName: cfName.trim() || null,
+                    autoStart,
+                    notes: notes.trim(),
+                    ...(token.trim() ? { token: token.trim() } : {}),
+                  };
+                  try {
+                    await api.tunnels.create(req);
+                    setCreating(false);
+                    setName('');
+                    setToken('');
+                    notify.ok(t('common.saved'));
+                    await overview.reload();
+                  } catch (ex) {
+                    notify.fail(ex);
+                  }
+                }}
+              >
+                <TextInput label={t('tunnels.name')} placeholder="Prod Studio" value={name} onChange={(e) => setName(e.target.value)} />
+                <Select
+                  label={t('tunnel.modeLabel')}
+                  value={kind}
+                  onChange={(e) => setKind(e.target.value as ManagedTunnelKind)}
+                  options={[
+                    { value: 'quick', label: t('tunnels.kind.quick') },
+                    { value: 'token', label: t('tunnels.kind.token') },
+                    { value: 'named', label: t('tunnels.kind.named') },
+                  ]}
+                />
+                <TextInput
+                  label={t('tunnels.targetUrl')}
+                  placeholder={ov.defaultTargetUrl}
+                  value={targetUrl}
+                  onChange={(e) => setTargetUrl(e.target.value)}
+                />
+                <TextInput label={t('tunnel.hostname')} placeholder="studio.example.com" value={hostname} onChange={(e) => setHostname(e.target.value)} />
+                {kind === 'token' && (
+                  <TextInput
+                    label={t('tunnel.token')}
+                    type="password"
+                    autoComplete="off"
+                    value={token}
+                    onChange={(e) => setToken(e.target.value)}
+                    hint={t('tunnel.tokenHint')}
+                  />
+                )}
+                {kind === 'named' && (
+                  <TextInput label={t('tunnels.cfName')} placeholder="my-tunnel" value={cfName} onChange={(e) => setCfName(e.target.value)} />
+                )}
+                <TextInput label={t('tunnels.notes')} value={notes} onChange={(e) => setNotes(e.target.value)} />
+                <Checkbox className="sm:col-span-2" label={t('tunnel.autoStart')} checked={autoStart} onChange={(e) => setAutoStart(e.target.checked)} />
+                <div className="sm:col-span-2 flex gap-2">
+                  <Button type="submit" size="sm" variant="primary" disabled={!name.trim()}>
+                    {t('common.save')}
+                  </Button>
+                  <Button type="button" size="sm" variant="ghost" onClick={() => setCreating(false)}>
+                    {t('common.cancel')}
+                  </Button>
+                </div>
+              </form>
+            )}
+
+            {ov.managed.length === 0 ? (
+              <p className="text-muted">{t('tunnels.empty')}</p>
+            ) : (
+              <ul className="flex flex-col gap-2" data-testid="managed-tunnels-list">
+                {ov.managed.map((m: ManagedTunnel) => (
+                  <li key={m.id} className="rounded-md border border-line p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <strong>{m.name}</strong>
+                        <Badge tone="info">{t(`tunnels.kind.${m.kind}` as TKey)}</Badge>
+                        <StatusPill status={m.running ? 'running' : 'stopped'} label={m.running ? t('tunnel.running') : t('tunnel.stopped')} />
+                        {m.hasToken && <Badge tone="success">{t('tunnel.tokenSaved')}</Badge>}
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {!m.running ? (
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            disabled={!ov.cloudflaredFound}
+                            loading={busyId === m.id}
+                            onClick={async () => {
+                              setBusyId(m.id);
+                              try {
+                                await api.tunnels.start(m.id);
+                                await overview.reload();
+                              } catch (ex) {
+                                notify.fail(ex);
+                              } finally {
+                                setBusyId(null);
+                              }
+                            }}
+                          >
+                            {t('tunnel.start')}
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            loading={busyId === m.id}
+                            onClick={async () => {
+                              setBusyId(m.id);
+                              try {
+                                await api.tunnels.stop(m.id);
+                                await overview.reload();
+                              } catch (ex) {
+                                notify.fail(ex);
+                              } finally {
+                                setBusyId(null);
+                              }
+                            }}
+                          >
+                            {t('tunnel.stop')}
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={async () => {
+                            try {
+                              await api.tunnels.remove(m.id);
+                              await overview.reload();
+                            } catch (ex) {
+                              notify.fail(ex);
+                            }
+                          }}
+                        >
+                          {t('common.delete')}
+                        </Button>
+                      </div>
+                    </div>
+                    <p className="mt-1 text-xs text-muted">
+                      <Code>{m.targetUrl}</Code>
+                      {m.publicUrl && (
+                        <>
+                          {' → '}
+                          <ExternalLink href={m.publicUrl}>{m.publicUrl}</ExternalLink>
+                        </>
+                      )}
+                    </p>
+                    {m.lastError && <p className="mt-1 text-xs text-danger">{m.lastError}</p>}
+                    {m.logTail.length > 0 && (
+                      <details className="mt-2">
+                        <summary className="cursor-pointer text-xs text-muted">{t('tunnel.log')}</summary>
+                        <LogBox lines={m.logTail} label={m.name} />
+                      </details>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {ov.external.length > 0 && (
+              <div className="rounded-md border border-line p-3">
+                <p className="mb-2 font-semibold">{t('tunnels.externalTitle', { n: ov.external.length })}</p>
+                <ul className="divide-y divide-line text-xs">
+                  {ov.external.map((p) => (
+                    <li key={p.pid} className="flex flex-wrap items-center justify-between gap-2 py-1.5">
+                      <span>
+                        <strong>PID {p.pid}</strong> · {p.targetHint} · <Code>{p.commandLine}</Code>
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        onClick={async () => {
+                          try {
+                            await api.tunnels.stopExternal(p.pid);
+                            await overview.reload();
+                          } catch (ex) {
+                            notify.fail(ex);
+                          }
+                        }}
+                      >
+                        {t('server.stop')}
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+      </AsyncView>
+      <ConfirmDialog
+        open={confirmQuick}
+        tone="danger"
+        title={t('tunnel.startTitle')}
+        confirmLabel={t('tunnels.quickWebBtn')}
+        cancelLabel={t('common.cancel')}
+        acknowledge={t('tunnel.ack')}
+        onCancel={() => setConfirmQuick(false)}
+        onConfirm={async () => {
+          await api.tunnels.quickWeb();
+          setConfirmQuick(false);
+          await overview.reload();
+        }}
+      >
+        <p>{t('tunnel.quickNote')}</p>
+      </ConfirmDialog>
+    </Card>
   );
 }

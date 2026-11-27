@@ -3,21 +3,20 @@
 > Đọc trước: `AGENTS.md` → `docs/shared/PROJECT_MEMORY.md` → `docs/shared/ROADMAP.md` → `docs/shared/TASK_BOARD.md` → file này.
 > Sau khi làm: cập nhật `docs/shared/*` rồi `npm run handoff -- --agent codex --summary "..." --next "..."` (đồng bộ cả 3 file handoff).
 
-## Phiên gần nhất (2026-11-26 · antigravity)
+## Phiên gần nhất (2026-11-27 · antigravity)
 **Đã làm:**
-- Đồng bộ đầy đủ 100% tính năng giữa bản App Desktop và bản Web cho Owner (`ADR-013`), kết nối tới phần cứng máy chủ của bản App (hỗ trợ cả cùng miền lẫn chéo miền qua `ServerConnectionBox` + CORS Bearer + `POST /api/auth/ticket`).
-- Đã triển khai `GET /api/videos/:id/shares` + UI danh sách link chia sẻ đang hoạt động, sao lưu & khôi phục SQLite (`GET /api/system/backups`, `POST /api/system/restore`), benchmark encoder 720p (`POST /api/system/ffmpeg/benchmark`), kịch bản Playwright `web-parity.spec.ts` và phát hành GitHub Release `v0.1.0`.
+- Hoàn tất **P7 → P13 (`v0.2.0`)** đồng bộ 100% giữa bản App và bản Web (`ADR-014`): duyệt thư mục máy chủ, tải ảnh/video từ điện thoại & lưu về App Photos, import skill `.zip`/`.tar.gz` & tải thư mục trình duyệt, **AI Studio** đơn/đa phiên song song (`agy`/`claude`/`codex`), **CRUD đa Cloudflare Tunnel** + **Cloudflare Access JWT**, trung tâm **Shared Memory & Handoff 3 AI**, và đã bổ sung `npm run e2e:real` chạy Playwright trực tiếp trên binary `doto-server` thật trong CI!
 
 **File/module cốt lõi:** `crates/{core,system,media,skills,integrations,server}`, `apps/desktop/src-tauri`, `apps/web`, `packages/ui`, `scripts/*.mjs`, `.github/workflows/{ci,release}.yml`, `docs/API.md`, `docs/SECURITY.md`.
 
-**Tests (máy dev Windows 11, 2026-11-26):** xem khối "Lần chạy test gần nhất" bên dưới và `docs/shared/LAST_TEST_RUN.md`.
+**Tests (máy dev Windows 11, 2026-11-27):** xem khối "Lần chạy test gần nhất" bên dưới và `docs/shared/LAST_TEST_RUN.md`.
 
-**Blocker:** B1 OAuth client_id cho GitHub Device Flow · B2 tài khoản Cloudflare để kiểm chứng tunnel thật · B3 chứng chỉ ký mã (chi tiết: `TASK_BOARD.md`).
+**Blocker:** B1 OAuth client_id cho GitHub Device Flow · B2 tài khoản Cloudflare để kiểm chứng tunnel/Access trên domain thật · B3 chứng chỉ ký mã (chi tiết: `TASK_BOARD.md`).
 
 ## Việc tiếp theo gợi ý cho OpenAI Codex
-1. Bổ sung project Playwright thứ hai chạy trực tiếp với binary `doto-server` thật trong CI (`target/debug/doto-server --data-dir .e2e-data --control-port 0 --token-file .e2e-data/url.txt --web-root apps/web/dist` trong `globalSetup`).
+1. Mở rộng thêm kịch bản trong `apps/web/e2e-real/real-server.spec.ts` (ví dụ stream Range video thật bằng FFmpeg trong CI nếu cài thêm `ffmpeg` vào job Ubuntu).
 2. Bổ sung mDNS (`doto.local`) tuỳ chọn cho chế độ LAN nếu cần khám phá tự động trong mạng nội bộ.
-3. Giữ hợp đồng: mọi thay đổi field API phải sửa đồng thời `apps/web/src/api/types.ts`, handler trong `crates/server/src/routes.rs` và `docs/API.md`.
+3. Giữ hợp đồng: mọi thay đổi field API phải sửa đồng thời `apps/web/src/api/types.ts`, handler trong `crates/server/src/{routes,v02}.rs` và `docs/API.md`.
 
 Cách chạy tiếp:
 ```

@@ -1,7 +1,7 @@
 {
   "name": "doto-skill",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Doto Skill — desktop + local web server + AI CLI manager + video library",
   "workspaces": [
     "packages/*",
@@ -20,6 +20,7 @@
     "unit-test": "node scripts/task.mjs unit-test",
     "integration-test": "node scripts/task.mjs integration-test",
     "e2e": "node scripts/task.mjs e2e",
+    "e2e:real": "node scripts/task.mjs e2e-real",
     "build": "node scripts/task.mjs build",
     "release-check": "node scripts/task.mjs release-check",
     "desktop:dev": "node scripts/task.mjs desktop-dev",

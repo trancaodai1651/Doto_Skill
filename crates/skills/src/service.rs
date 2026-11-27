@@ -540,6 +540,13 @@ impl SkillService {
         Ok(scanner::resolve_skill_dir(&root, rel)?)
     }
 
+    /// Trả thông tin skill và đường dẫn thư mục đã xác minh trên đĩa (dùng cho AI Studio `--add-dir`).
+    pub async fn skill_dir_by_id(&self, id: &str) -> Result<(Skill, PathBuf), SkillError> {
+        let (skill, src, _) = self.skill_row(id).await?;
+        let dir = Self::skill_dir(&src, &skill.rel_path)?;
+        Ok((skill, dir))
+    }
+
     pub async fn detail(&self, id: &str) -> Result<SkillDetail, SkillError> {
         let (skill, src, metadata) = self.skill_row(id).await?;
         let dir = Self::skill_dir(&src, &skill.rel_path)?;

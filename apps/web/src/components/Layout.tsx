@@ -16,10 +16,12 @@ interface NavItem {
 
 export const ADMIN_NAV: NavItem[] = [
   { to: '/', key: 'nav.dashboard', icon: '◧' },
+  { to: '/studio', key: 'nav.studio', icon: '⚡' },
   { to: '/skills', key: 'nav.skills', icon: '✦' },
   { to: '/tools', key: 'nav.tools', icon: '⌘' },
   { to: '/videos', key: 'nav.videos', icon: '▶' },
   { to: '/jobs', key: 'nav.jobs', icon: '≡' },
+  { to: '/memory', key: 'nav.memory', icon: '◈' },
   { to: '/server', key: 'nav.server', icon: '⇄' },
   { to: '/devices', key: 'nav.devices', icon: '▢' },
   { to: '/performance', key: 'nav.performance', icon: '▲' },
@@ -29,7 +31,7 @@ export const ADMIN_NAV: NavItem[] = [
   { to: '/help', key: 'nav.help', icon: '?' },
 ];
 
-const MOBILE_PRIMARY = ['/', '/skills', '/videos', '/jobs'];
+const MOBILE_PRIMARY = ['/', '/studio', '/videos', '/jobs'];
 
 export function Toolbar() {
   const { lang, setLang, t } = useI18n();

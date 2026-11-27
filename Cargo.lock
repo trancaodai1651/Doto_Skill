@@ -1217,7 +1217,7 @@ dependencies = [
 
 [[package]]
 name = "doto-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -1239,7 +1239,7 @@ dependencies = [
 
 [[package]]
 name = "doto-desktop"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "doto-core",
@@ -1256,7 +1256,7 @@ dependencies = [
 
 [[package]]
 name = "doto-integrations"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1268,15 +1268,17 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "sysinfo",
  "tempfile",
  "tokio",
+ "tokio-util",
  "tracing",
  "which",
 ]
 
 [[package]]
 name = "doto-media"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1297,12 +1299,13 @@ dependencies = [
 
 [[package]]
 name = "doto-server"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "argon2",
  "axum",
  "axum-extra",
+ "base64 0.22.1",
  "chrono",
  "clap",
  "doto-core",
@@ -1310,6 +1313,7 @@ dependencies = [
  "doto-media",
  "doto-skills",
  "doto-system",
+ "flate2",
  "futures",
  "if-addrs",
  "ipnet",
@@ -1320,6 +1324,7 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "sysinfo",
  "tempfile",
  "tokio",
  "tokio-util",
@@ -1332,7 +1337,7 @@ dependencies = [
 
 [[package]]
 name = "doto-skills"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1359,7 +1364,7 @@ dependencies = [
 
 [[package]]
 name = "doto-system"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "chrono",

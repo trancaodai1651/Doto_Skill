@@ -7,9 +7,11 @@
 
 pub mod auth;
 pub mod error;
+pub mod memory;
 pub mod public;
 pub mod routes;
 pub mod stream;
+pub mod v02;
 
 use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
@@ -44,6 +46,7 @@ pub struct AppState {
     pub media: Arc<MediaService>,
     pub skills: Arc<SkillService>,
     pub tools: Arc<ToolManager>,
+    pub studio: Arc<doto_integrations::StudioRunner>,
     pub tunnel: Arc<TunnelManager>,
     pub hardware: RwLock<Option<HardwareInfo>>,
     pub public: PublicServer,
@@ -92,7 +95,8 @@ impl AppState {
         let media = MediaService::new(db.clone(), paths.clone(), rm.clone(), events.clone());
         let skills = SkillService::new(db.clone(), paths.clone(), events.clone(), secrets.clone());
         let tools = ToolManager::new(db.clone(), events.clone(), &paths.data_dir);
-        let tunnel = TunnelManager::new(secrets.clone(), events.clone());
+        let studio = doto_integrations::StudioRunner::new(db.clone(), events.clone(), tools.clone());
+        let tunnel = TunnelManager::with_db(db.clone(), secrets.clone(), events.clone());
         let hw: Option<HardwareInfo> = db
             .call(|c| {
                 use rusqlite::OptionalExtension;
@@ -109,6 +113,7 @@ impl AppState {
             media,
             skills,
             tools,
+            studio,
             tunnel,
             hardware: RwLock::new(hw),
             public: PublicServer::default(),
@@ -292,6 +297,15 @@ impl AppState {
                 }
             }
         }
+        if let Some(bin) = self.cloudflared_path() {
+            if let Ok(managed) = self.tunnel.list_managed().await {
+                for m in managed.into_iter().filter(|m| m.auto_start) {
+                    if let Err(e) = self.tunnel.start_managed(&m.id, bin.clone()).await {
+                        tracing::warn!(tunnel = %m.name, error = %e, "không tự bật được managed tunnel");
+                    }
+                }
+            }
+        }
     }
 
     pub fn cloudflared_path(&self) -> Option<PathBuf> {
@@ -299,7 +313,7 @@ impl AppState {
     }
 
     pub async fn shutdown(&self) {
-        self.tunnel.stop().await;
+        self.tunnel.stop_all().await;
         self.public.stop().await;
     }
 }
@@ -349,6 +363,13 @@ async fn guard(State((st, kind)): State<(Arc<AppState>, ListenerKind)>, mut req:
             if !public::ip_allowed(&cfg.ip_allowlist, auth::client_ip(peer, req.headers())) {
                 return error::ApiError::forbidden("địa chỉ IP không nằm trong danh sách cho phép").into_response();
             }
+            if *req.method() != Method::OPTIONS && req.uri().path() != "/api/health" {
+                let raw_jwt = req.headers().get("cf-access-jwt-assertion").and_then(|v| v.to_str().ok());
+                let peer_loop = peer.map(|p| p.ip().is_loopback()).unwrap_or(false);
+                if let Err(reason) = public::verify_cf_access_jwt(&cfg, raw_jwt, peer_loop) {
+                    return error::ApiError::forbidden(reason).into_response();
+                }
+            }
         }
     }
 
@@ -361,7 +382,10 @@ async fn guard(State((st, kind)): State<(Arc<AppState>, ListenerKind)>, mut req:
         attach_cors(&mut res, origin.as_deref());
         let h = res.headers_mut();
         h.insert(header::ACCESS_CONTROL_ALLOW_METHODS, HeaderValue::from_static("GET, POST, PUT, PATCH, DELETE, OPTIONS"));
-        h.insert(header::ACCESS_CONTROL_ALLOW_HEADERS, HeaderValue::from_static("Content-Type, Authorization, X-CSRF-Token, Range"));
+        h.insert(
+            header::ACCESS_CONTROL_ALLOW_HEADERS,
+            HeaderValue::from_static("Content-Type, Authorization, X-CSRF-Token, Range, X-File-Name, Cf-Access-Jwt-Assertion"),
+        );
         h.insert(header::ACCESS_CONTROL_MAX_AGE, HeaderValue::from_static("600"));
         return res;
     }
@@ -405,8 +429,13 @@ async fn guard(State((st, kind)): State<(Arc<AppState>, ListenerKind)>, mut req:
 }
 
 pub fn build_router(st: Arc<AppState>, kind: ListenerKind) -> Router {
-    let api = routes::api_router(kind).with_state(st.clone());
-    let mut app = Router::new().merge(api);
+    let json_api =
+        routes::api_router(kind).merge(v02::json_routes()).with_state(st.clone()).layer(tower_http::limit::RequestBodyLimitLayer::new(2 * 1024 * 1024));
+    let upload_api = v02::upload_router()
+        .with_state(st.clone())
+        .layer(axum::extract::DefaultBodyLimit::max(v02::MAX_SKILL_ARCHIVE_BYTES))
+        .layer(tower_http::limit::RequestBodyLimitLayer::new(v02::MAX_MEDIA_UPLOAD_BYTES as usize));
+    let mut app = Router::new().merge(json_api).merge(upload_api);
     if let Some(root) = st.web_root.clone().filter(|r| r.join("index.html").is_file()) {
         let index = root.join("index.html");
         let serve = tower_http::services::ServeDir::new(&root).fallback(tower_http::services::ServeFile::new(index));
@@ -414,7 +443,5 @@ pub fn build_router(st: Arc<AppState>, kind: ListenerKind) -> Router {
     } else {
         app = app.fallback(|| async { (StatusCode::NOT_FOUND, "Doto Skill API đang chạy — chưa có giao diện web (apps/web/dist).").into_response() });
     }
-    app.layer(middleware::from_fn_with_state((st, kind), guard))
-        .layer(middleware::from_fn(security_headers))
-        .layer(tower_http::limit::RequestBodyLimitLayer::new(2 * 1024 * 1024))
+    app.layer(middleware::from_fn_with_state((st, kind), guard)).layer(middleware::from_fn(security_headers))
 }

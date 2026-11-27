@@ -20,6 +20,12 @@ pub struct AppSettings {
     pub video_source_dirs: Vec<String>,
     /// Thư mục xuất video; None = `<data>/exports`.
     pub output_dir: Option<String>,
+    /// Thư mục lưu tệp ảnh/video tải lên từ điện thoại / App Photos; None = `<data>/uploads`.
+    pub media_upload_dir: Option<String>,
+    /// Thư mục lưu các skill được import từ tệp nén hoặc tải thư mục trình duyệt; None = `<data>/custom-skills`.
+    pub custom_skill_dir: Option<String>,
+    /// Thư mục chứa bộ nhớ chung & handoff 3 AI; None = tự dò workspace hoặc `<data>/workspace-memory`.
+    pub workspace_memory_dir: Option<String>,
     pub ffmpeg_path: Option<String>,
     pub ffprobe_path: Option<String>,
     pub launch_at_login: bool,
@@ -33,6 +39,9 @@ impl Default for AppSettings {
             theme: "system".into(),
             video_source_dirs: vec![],
             output_dir: None,
+            media_upload_dir: None,
+            custom_skill_dir: None,
+            workspace_memory_dir: None,
             ffmpeg_path: None,
             ffprobe_path: None,
             launch_at_login: false,
@@ -55,9 +64,16 @@ impl AppSettings {
                 return Err(format!("thư mục nguồn phải là đường dẫn tuyệt đối: {d}"));
             }
         }
-        if let Some(o) = &self.output_dir {
-            if !std::path::Path::new(o).is_absolute() {
-                return Err("thư mục output phải là đường dẫn tuyệt đối".into());
+        for (label, opt) in [
+            ("thư mục output", &self.output_dir),
+            ("thư mục tải lên media", &self.media_upload_dir),
+            ("thư mục lưu skill import", &self.custom_skill_dir),
+            ("thư mục bộ nhớ chung", &self.workspace_memory_dir),
+        ] {
+            if let Some(p) = opt {
+                if !std::path::Path::new(p).is_absolute() {
+                    return Err(format!("{label} phải là đường dẫn tuyệt đối"));
+                }
             }
         }
         Ok(())
